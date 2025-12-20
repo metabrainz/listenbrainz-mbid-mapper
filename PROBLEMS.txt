@@ -1,0 +1,520 @@
+  Artist: Harry Nilsson
+  Release: Nilsson Schmilsson
+  Recording: Without You
+
+BAD
+
+SINGLE ARTIST SEARCH: 'Harry Nilsson' (harrynilsson)
+   MULTIPLE ARTIST SEARCH also
+S  400608    1.00 harrynilsson                             400608
+M  2259014   0.89 harrynilssoncher                         2259014
+S  12710     0.83 harrynilson                              12710     <--- if this were searched first, it would be found!
+S  400608    0.83 harrynilson                              400608
+S  4269684   0.83 harrynilson                              4269684
+M  2266704   0.76 harrynilssonmrux                         2266704
+M  3213355   0.73 harrynilssonjohnwaters                   3213355
+M  3213354   0.72 harrynilssonjoefagin                     3213354
+M  4035215   0.72 johnlennonharrynilsson                   4035215
+S  12710     0.70 nilsson                                  12710
+S  155389    0.70 nilsson                                  155389
+S  400608    0.70 nilsson                                  400608
+S  1361274   0.70 nilsson                                  1361274
+S  2883406   0.70 nilsson                                  2883406
+S  4269684   0.70 nilsson                                  4269684
+M  3213353   0.70 harrynilssonsheilaparker                 3213353
+
+RELEASE/RECORDING SEARCH for artist credit 400608
+    RELEASE SEARCH
+      1.00 783451   nilssonschmilsson
+    RECORDING SEARCH
+      1.00 31093913 withoutyou
+      0.83 1463576  mewithoutyou
+      0.74 4705004  introwithoutyou
+fetch metadata 400608 563671 31093913
+400608   e5963d26-01fa-40f5-b200-e0127f410a45 Nilsson
+563671   56ed93c7-8adc-4d2a-875b-4168de2f8e42 All Time Greatest Hits
+31093913 fa2013f9-dca8-4c1c-9481-753ffcadbae3 Without You
+
+
+CORRECT:
+
+Artist Credit: 12710    e5963d26-01fa-40f5-b200-e0127f410a45 Nilsson
+Release:       398089   1ae84595-aa9d-3190-bce9-140eb81800e4 Nilsson Schmilsson
+Recording:     31093913 fa2013f9-dca8-4c1c-9481-753ffcadbae3 Without You
+
+Formatted output:
+{ "Harry Nilson","Nilsson Schmilsson","Without You","e5963d26-01fa-40f5-b200-e0127f410a45","1ae84595-aa9d-3190-bce9-140eb81800e4","fa2013f9-dca8-4c1c-9481-753ffcadbae3" }
+
+---------------------------------------------
+
+  Artist: Godspeed You! Black Emperor
+  Release: Lift Your Skinny Fists Like Antennas to Heaven
+  Recording: Like Antennas To Heaven…
+
+s Godspeed You! Black Emperor, Lift Your Skinny Fists Like Antennas to Heaven, Like Antennas To Heaven…
+
+BAD
+
+SINGLE ARTIST SEARCH: 'Godspeed You! Black Emperor' (godspeedyoublackemperor)
+   MULTIPLE ARTIST SEARCH also
+S  9239      1.00 godspeedyoublackemperor                  9239
+S  834798    1.00 godspeedyoublackemperor                  834798   <--- if this were searched first, it would be found!
+
+RELEASE/RECORDING SEARCH for artist credit 9239
+    RELEASE SEARCH
+      1.00 2558434  liftyourskinnyfistslikeantennastoheaven
+    RECORDING SEARCH
+      0.90 341293   antennastoheaven
+RELEASE/RECORDING SEARCH for artist credit 834798
+    RELEASE SEARCH
+      1.00 2558434  liftyourskinnyfistslikeantennastoheaven
+      0.95 25405    liftyrskinnyfistslikeantennastoheaven
+    RECORDING SEARCH
+      0.94 341293   antennastoheaven
+fetch metadata 834798 25405 341293
+834798   3648db01-b29d-4ab9-835c-83f6a5068fe4 Godspeed You Black Emperor!
+25405    e51e1f8b-62ba-388f-8567-0c051b575351 Lift Yr. Skinny Fists Like Antennas to Heaven!
+341293   5fb00c2b-5bc9-420a-882a-cc024d137a08 Antennas to Heaven
+
+-------------------------------------------------------------------------------
+basic lookup tests
+-------------------------------------------------------------------------------
+/home/robert/metabrainz/faster-fuzzy/mapper/test.cpp:194
+...............................................................................
+
+/home/robert/metabrainz/faster-fuzzy/mapper/test.cpp:206: FAILED:
+  REQUIRE( get<1>(result) == test_case.release_mbid )
+with expansion:
+  "e51e1f8b-62ba-388f-8567-0c051b575351"
+  ==
+  "f77eeaef-878e-4db3-ae65-5161cf929f14"
+with messages:
+  Artist: Godspeed You! Black Emperor
+  Release: Lift Your Skinny Fists Like Antennas to Heaven
+  Recording: Like Antennas To Heaven…
+
+
+GOOD 
+
+
+
+/home/robert/metabrainz/faster-fuzzy/mapper/test.cpp:205: FAILED:
+  REQUIRE( get<0>(result) == test_case.artist_credit_mbids )
+with expansion:
+  ""
+  ==
+  "056e4f3e-d505-4dad-8ec1-d04f521cbb56"
+with messages:
+  Artist: daft punk
+  Release: 
+  Recording: horizon
+
+
+
+START 'void' '' 'verdict for worst dictator'
+current state_start                    event event_start               new state_artist_name_check       
+current state_artist_name_check        event event_normal_name         new state_artist_search           
+ARTIST SEARCH: 'void' (void)
+    ARTIST RESULTS:
+      1.00 3137895  s V0iD
+      1.00 2184630  s void feat. Various
+      1.00 2251361  s Void
+      1.00 2343054  s Void
+      1.00 2542784  s Void
+      1.00 2672198  s Void
+      1.00 2720539  s Void
+      1.00 2780542  s VO.I.D
+      1.00 2953200  s Void
+      1.00 2977224  s Void
+      1.00 3010997  s void(Mournfinale)
+      1.00 3021847  s Void
+      1.00 3092937  s void (Mournfinale)
+      1.00 3134442  s ᐯᗝᎥᗪ
+      1.00 260334   s Void
+      1.00 3168870  s Void
+      1.00 3271105  s VOID
+      1.00 3484011  s V.O.I.D.
+      1.00 3854175  s Void
+      1.00 4350044  s void
+      1.00 4358813  s Void
+      1.00 4444386  s Void
+      1.00 4503772  s void.
+      1.00 4508240  s Void
+      1.00 4541557  s VOiD
+      1.00 4616725  s Void
+      1.00 4675915  s VOID
+      1.00 2058761  s void pres. Personative (Mournfinale)
+      1.00 47587    s VOID
+      1.00 272011   s Void
+      1.00 297266   s Void
+      1.00 297273   s Void
+      1.00 297275   s Void
+      1.00 297279   s Void
+      1.00 306139   s Void
+      1.00 465242   s Void
+      1.00 730770   s Void
+      1.00 1093481  s Tragederia
+      1.00 1128501  s void
+      1.00 1270527  s Void
+      1.00 1381550  s void
+      1.00 2167836  s Void
+      1.00 2056147  s VOID
+      1.00 2036864  s Void
+      1.00 3773127  s VOiD
+      1.00 1699866  s void
+      1.00 1691096  s Void..
+      1.00 1678125  s Void
+      1.00 1635080  s void (Mournfinale)
+      1.00 1631749  s ぼいど
+      1.00 1622025  s 空隙
+      1.00 1606156  s Void
+      1.00 1337632  s Void
+      0.89 485679   s Voide
+      0.85 883109   s Voida
+      0.85 911013   s Avoid!
+      0.85 509796   s Avoid
+      0.85 2794284  s Avoid
+      0.85 3245218  s Avoid
+      0.85 3481221  s A\\VOID
+      0.71 1389670  m void & えば
+      0.70 2022254  m void feat. あき (A-One)
+current state_artist_search            event event_has_matches         new state_select_artist_match     
+artist credit id selected: 3137895
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2184630
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2251361
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2343054
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2542784
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2672198
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2720539
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2780542
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2953200
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2977224
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3010997
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3021847
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3092937
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3134442
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 260334
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3168870
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3271105
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3484011
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3854175
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4350044
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4358813
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4444386
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4503772
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4508240
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4541557
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4616725
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 4675915
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2058761
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 47587
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 272011
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 297266
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 297273
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 297275
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 297279
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 306139
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 465242
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 730770
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1093481
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1128501
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1270527
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1381550
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      1.00 17003108 verdictforworstdictator
+current state_recording_search         event event_has_matches         new state_select_recording_match  
+recording id selected: 17003108
+current state_select_recording_match   event event_meets_threshold     new state_has_release_argument    
+current state_has_release_argument     event event_no                  new state_lookup_canonical_release
+current state_lookup_canonical_release event event_has_matches         new state_evaluate_match          
+      Links for recording (rec_result->result_index=35):
+        rec_index=35 -> (rel_idx=7, rel_id=1518889, rec_id=17003108)
+found no link between recording and release
+current state_evaluate_match           event event_doesnt_meet_threshold new state_select_recording_match  
+current state_select_recording_match   event event_doesnt_meet_threshold new state_select_artist_match     
+artist credit id selected: 2167836
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2056147
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2036864
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3773127
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1699866
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1691096
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1678125
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1635080
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1631749
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1622025
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1606156
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1337632
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 485679
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 883109
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 911013
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 509796
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2794284
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3245218
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 3481221
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 1389670
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+artist credit id selected: 2022254
+current state_select_artist_match      event event_meets_threshold     new state_recording_search        
+    RECORDING SEARCH
+      No recording results.
+current state_recording_search         event event_no_matches          new state_select_artist_match     
+current state_select_artist_match      event event_doesnt_meet_threshold new state_fail                    
+Final state state_fail
+no matches
+-------------------------------------------------------------------------------
+basic lookup tests
+-------------------------------------------------------------------------------
+/home/robert/metabrainz/faster-fuzzy/mapper/test.cpp:194
+...............................................................................
+
+/home/robert/metabrainz/faster-fuzzy/mapper/test.cpp:205: FAILED:
+  REQUIRE( get<0>(result) == test_case.artist_credit_mbids )
+with expansion:
+  ""
+  ==
+  "c8a0cb7a-99c8-4bcd-82d5-bcef201e13d1"
+with messages:
+  Artist: void
+  Release: 
+  Recording: verdict for worst dictator
+

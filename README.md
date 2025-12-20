@@ -1,2 +1,65 @@
-# listenbrainz-mbid-mapper
-Version 2.0 of the ListenBrainz MBID Mapper
+# faster-fuzzy
+
+Fast fuzzy matching service for mapping music metadata to MusicBrainz IDs.
+
+## Quick Start
+
+### 1. Clone
+
+```bash
+git clone --recurse-submodules https://github.com/metabrainz/faster-fuzzy.git
+cd faster-fuzzy
+```
+
+### 2. Build
+
+```bash
+./build-debug.sh
+```
+
+Or for a production optimized version:
+
+```bash
+./build-release.sh
+```
+
+### 3. Create Base Index
+
+```bash
+./create <postgres_connection_string> <output_dir>
+```
+
+Example:
+```bash
+./create "host=localhost dbname=musicbrainz_db user=musicbrainz" ../index
+```
+
+### 4. Build Search Indexes
+
+```bash
+./make_indexes <index_dir>
+```
+
+Example:
+```bash
+./make_indexes ../index
+```
+
+
+./run.sh make_index
+./run.sh make_indexes
+./run.sh make_indexes --skip-artists
+./run.sh explore
+
+### 5. Run Server
+
+```bash
+./server -i <index_dir> -t <templates_dir>
+```
+
+Example:
+```bash
+./server -i ../index -t ../templates -p 5000
+```
+
+Then open http://localhost:5000 in your browser.
