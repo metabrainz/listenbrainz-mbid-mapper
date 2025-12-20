@@ -1,17 +1,50 @@
-# faster-fuzzy
+# listenbrainz-mbid-mapper
 
-Fast fuzzy matching service for mapping music metadata to MusicBrainz IDs.
+MBID mapping service for mapping ListenBrainz music metadata to MusicBrainz IDs.
 
 ## Quick Start
 
-### 1. Clone
+### 0. Prerequisites
+
+To work with this project and build the mapping you'll need musicbrainz-docker installed and the full DB loaded:
+
+https://github.com/metabrainz/musicbrainz-docker
+
+Then you'll need the listenbrainz-server project:
+
+https://github.com/metabrainz/listenbrainz-server
+
+Then you'll need to create the local canonical data. Make sure your MB database has the "mapping" schema.
 
 ```bash
-git clone --recurse-submodules https://github.com/metabrainz/faster-fuzzy.git
-cd faster-fuzzy
+cd mbid_mapper
+./manage.py canonical-data --use-mb-conn
 ```
 
-### 2. Build
+### 1. Clone repository
+
+```bash
+git clone --recurse-submodules https://github.com/metabrainz/listenbrainz-mbid-mapper.git
+cd listenbrainz-mbid-mapper
+```
+
+### 2. Setup
+
+If you're going to use a local development environment use .env-local-dev as a starting point: (this is recommended for development)
+
+```bash
+cp .env-local-dev .env
+```
+
+For deployment or running it in docker:
+
+```bash
+cp .env-docker .env
+```
+
+Then edit .env to reflect your requirements.
+
+### 3. Build
 
 ```bash
 ./build-debug.sh
@@ -23,43 +56,22 @@ Or for a production optimized version:
 ./build-release.sh
 ```
 
-### 3. Create Base Index
+### 3. Create Base Mapping
 
 ```bash
-./create <postgres_connection_string> <output_dir>
+./build/make_mapping
 ```
 
-Example:
-```bash
-./create "host=localhost dbname=musicbrainz_db user=musicbrainz" ../index
-```
-
-### 4. Build Search Indexes
+### 4. Build Indexes
 
 ```bash
-./make_indexes <index_dir>
+./build/make_indexes
 ```
-
-Example:
-```bash
-./make_indexes ../index
-```
-
-
-./run.sh make_index
-./run.sh make_indexes
-./run.sh make_indexes --skip-artists
-./run.sh explore
 
 ### 5. Run Server
 
 ```bash
-./server -i <index_dir> -t <templates_dir>
+./build/server
 ```
 
-Example:
-```bash
-./server -i ../index -t ../templates -p 5000
-```
-
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:5000 in your browser. See deceptively simple this setup is? You'd be crazy to try it.
