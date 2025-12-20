@@ -379,10 +379,12 @@ class ArtistIndex {
             
                 // Clear the PGresult object to free memory
                 PQclear(res);
+                PQfinish(conn);
             }
             catch (exception& e)
             {
                 printf("build artist db exception: %s\n", e.what());
+                throw;
             }
         }
 
@@ -438,6 +440,7 @@ class ArtistIndex {
             catch (exception& e)
             {
                 printf("build artist aliases db exception: %s\n", e.what());
+                throw;
             }
         }
         

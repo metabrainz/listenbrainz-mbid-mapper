@@ -14,6 +14,9 @@ struct TestCase {
     std::string recording_mbid;
 };
 
+// new cases:
+// START 'Betty George' '' 'Summer of '82'
+
 inline std::vector<TestCase> get_test_cases() {
     return {
         { "portishead", "portishead", "western eyes", "8f6bd1e4-fbe1-4f50-aa9b-94c450ec0f11", "10ac58ca-0655-4b16-a6cb-58fdc309de0a", "34745941-69c5-401a-bdb9-ae761a9b3562" },
