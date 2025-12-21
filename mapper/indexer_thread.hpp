@@ -93,7 +93,7 @@ class IndexerThread {
                 while (query.executeStep())
                     artist_ids.push_back(query.getColumn(0));
 
-                log("Build indexes");
+                lb_log("Build indexes");
                 pair<FuzzyIndex *, FuzzyIndex *> indexes;
                 vector<CreatorThread *> threads;
                 vector<CreatorThread *> data_to_commit;
@@ -105,7 +105,7 @@ class IndexerThread {
                 
                 auto now = chrono::system_clock::now();
                 time_t t0 = std::chrono::system_clock::to_time_t(now);
-                log("Using %d threads", num_threads);
+                lb_log("Using %d threads", num_threads);
                 while(artist_ids.size() || threads.size()) {
                     for(int i = threads.size() - 1; i >= 0; i--) {
                         if (i < 0)
@@ -154,7 +154,7 @@ class IndexerThread {
                 }                                
                 data_to_commit.clear();
 
-                log("indexed %lu rows                             ", count);
+                lb_log("indexed %lu rows                             ", count);
             }
             catch (std::exception& e)
             {

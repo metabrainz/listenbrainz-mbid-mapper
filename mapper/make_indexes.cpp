@@ -7,17 +7,17 @@
 #include "SQLiteCpp.h"
 
 void print_usage() {
-    log("Usage: make_indexes [--skip-artists] [--force-rebuild]");
-    log("Options:");
-    log("  --skip-artists   Skip building artist indexes");
-    log("  --force-rebuild  Force rebuild all recording indexes (ignore cache)");
-    log("");
-    log("Required environment variables:");
-    log("  INDEX_DIR                         Directory containing mapping.db");
-    log("  CANONICAL_MUSICBRAINZ_DATA_CONNECT  PostgreSQL connection string (unless --skip-artists)");
-    log("");
-    log("Optional environment variables:");
-    log("  NUM_BUILD_THREADS                 Thread count (0 = num CPU cores, default: 0)");
+    lb_log("Usage: make_indexes [--skip-artists] [--force-rebuild]");
+    lb_log("Options:");
+    lb_log("  --skip-artists   Skip building artist indexes");
+    lb_log("  --force-rebuild  Force rebuild all recording indexes (ignore cache)");
+    lb_log("");
+    lb_log("Required environment variables:");
+    lb_log("  INDEX_DIR                         Directory containing mapping.db");
+    lb_log("  CANONICAL_MUSICBRAINZ_DATA_CONNECT  PostgreSQL connection string (unless --skip-artists)");
+    lb_log("");
+    lb_log("Optional environment variables:");
+    lb_log("  NUM_BUILD_THREADS                 Thread count (0 = num CPU cores, default: 0)");
 }
 
 int main(int argc, char *argv[])
@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
             print_usage();
             return 0;
         } else {
-            log("Error: Unknown option: %s", arg.c_str());
+            lb_error("Error: Unknown option: %s", arg.c_str());
             print_usage();
             return -1;
         }
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     // Get required INDEX_DIR from environment
     const char* env_index_dir = std::getenv("INDEX_DIR");
     if (!env_index_dir || strlen(env_index_dir) == 0) {
-        log("Error: INDEX_DIR environment variable not set");
+        lb_error("Error: INDEX_DIR environment variable not set");
         print_usage();
         return -1;
     }
@@ -65,41 +65,41 @@ int main(int argc, char *argv[])
     if (!skip_artists) {
         const char* db_connect = std::getenv("CANONICAL_MUSICBRAINZ_DATA_CONNECT");
         if (!db_connect || strlen(db_connect) == 0) {
-            log("Error: CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable not set");
-            log("This is required for building artist indexes. Use --skip-artists to skip.");
+            lb_error("Error: CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable not set");
+            lb_error("This is required for building artist indexes. Use --skip-artists to skip.");
             return -1;
         }
     }
     
     // Validate flag combinations
     if (skip_artists && force_rebuild) {
-        log("Error: --skip-artists and --force-rebuild cannot be used together");
+        lb_error("Error: --skip-artists and --force-rebuild cannot be used together");
         print_usage();
         return -1;
     }
    
     // Clear cache if force rebuild is requested
     if (force_rebuild) {
-        log("force rebuild requested - clearing index cache");
+        lb_error("force rebuild requested - clearing index cache");
         try {
             string db_file = index_dir + "/mapping.db";
             SQLite::Database db(db_file, SQLite::OPEN_READWRITE);
             db.exec("DELETE FROM index_cache");
-            log("index cache cleared successfully");
+            lb_log("index cache cleared successfully");
         } catch (const std::exception& e) {
-            log("Error clearing index cache: %s", e.what());
+            lb_error("Error clearing index cache: %s", e.what());
             return -1;
         }
     }
 
     if (!skip_artists) {
-        log("build artist indexes");
+        lb_log("build artist indexes");
         ArtistIndex *artist_index = new ArtistIndex(index_dir);
         artist_index->build();
         // clean up to free memory
         delete artist_index;
     } else {
-        log("skipping artist indexes (--skip-artists specified)");
+        lb_log("skipping artist indexes (--skip-artists specified)");
     }
 
 
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
     num_threads = (num_threads <= 0) ? std::thread::hardware_concurrency() : num_threads;
     if (num_threads <= 0) num_threads = 4;  // fallback if hardware_concurrency() fails
                                             //
-    log("build recording indexes with %d threads", num_threads);
+    lb_log("build recording indexes with %d threads", num_threads);
     IndexerThread mapping(index_dir, num_threads);
     mapping.build_recording_indexes();
 

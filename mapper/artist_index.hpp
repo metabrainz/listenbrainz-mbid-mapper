@@ -326,7 +326,7 @@ class ArtistIndex {
                 }
                 conn = PQconnectdb(db_connect);
                 if (PQstatus(conn) != CONNECTION_OK) {
-                    log("Connection to database failed: %s", PQerrorMessage(conn));
+                    lb_error("Connection to database failed: %s", PQerrorMessage(conn));
                     PQfinish(conn);
                     throw std::runtime_error("PostgreSQL connection failed");
                 }
@@ -401,7 +401,7 @@ class ArtistIndex {
                 }
                 conn = PQconnectdb(db_connect);
                 if (PQstatus(conn) != CONNECTION_OK) {
-                    log("Connection to database failed: %s", PQerrorMessage(conn));
+                    lb_error("Connection to database failed: %s", PQerrorMessage(conn));
                     PQfinish(conn);
                     throw std::runtime_error("PostgreSQL connection failed");
                 }
@@ -446,7 +446,7 @@ class ArtistIndex {
         
         void build() {
             
-            log("load single artist data");
+            lb_log("load and index arist data");
             // TODO: THis process creates duplicates
             load_artist_data(fetch_single_artists_query, single_artist_credit_ids, single_artist_credit_texts);
             load_artist_aliases(single_artist_credit_ids, single_artist_credit_texts);
@@ -459,7 +459,6 @@ class ArtistIndex {
             // TESTING:
             // - Leave out stupid artists for now.
 
-            log("encode and unique artist data");
             // Encode the single artists into sets in order to remove dups
             for(unsigned int i = 0; i < single_artist_credit_ids.size(); i++) {
                 auto ret = encode.encode_string(single_artist_credit_texts[i]);
@@ -491,7 +490,6 @@ class ArtistIndex {
             // The extra contexts are so that the stringstreams go out of scope ASAP
             {
                 FuzzyIndex *single_artist_index = new FuzzyIndex();
-                log("build single artist index");
                 single_artist_index->build(single_ids, single_texts);
                 std::stringstream ss_single;
                 {
@@ -502,13 +500,12 @@ class ArtistIndex {
                 vector<unsigned int>().swap(single_ids);
                 vector<string>().swap(single_texts);
 
-                log("artist index size: %lu bytes", ss_single.str().length());
+                lb_log("artist index size: %lu bytes", ss_single.str().length());
                 try
                 {
                     SQLite::Database    db(db_file, SQLite::OPEN_READWRITE);
                     SQLite::Statement   query(db, insert_blob_query);
                 
-                    log("save single artist index");
                     query.bind(1, SINGLE_ARTIST_INDEX_ENTITY_ID);
                     query.bind(2, (const char *)ss_single.str().c_str(), (int32_t)ss_single.str().length());
                     query.exec();
@@ -523,13 +520,12 @@ class ArtistIndex {
                 std::stringstream ss_stupid;
                 if (stupid_ids.size()) {
                     FuzzyIndex *stupid_artist_index = new FuzzyIndex();
-                    log("build stupid artist index");
                     stupid_artist_index->build(stupid_ids, stupid_texts);
                     {
                         cereal::BinaryOutputArchive oarchive(ss_stupid);
                         oarchive(*stupid_artist_index);
                     }
-                    log("stupid artist index size: %lu bytes", ss_stupid.str().length());
+                    lb_log("stupid artist index size: %lu bytes", ss_stupid.str().length());
                     delete stupid_artist_index;
 
                     if (stupid_ids.size()) {
@@ -539,7 +535,6 @@ class ArtistIndex {
                             SQLite::Statement   query(db, insert_blob_query);
                         
                             SQLite::Statement   query2(db, insert_blob_query);
-                            log("save stupid artist index");
                             query2.bind(1, STUPID_ARTIST_INDEX_ENTITY_ID);
                             query2.bind(2, (const char *)ss_stupid.str().c_str(), (int32_t)ss_stupid.str().length());
                             query2.exec();
@@ -555,7 +550,7 @@ class ArtistIndex {
             }
 
             // load and process multiple artists
-            log("load multiple artist data");
+            lb_log("load and index multiple artist data");
             load_artist_data(fetch_multiple_artists_query, multiple_artist_credit_ids, multiple_artist_credit_texts);
 
             for(unsigned int i = 0; i < multiple_artist_credit_ids.size(); i++) {
@@ -573,7 +568,6 @@ class ArtistIndex {
 
             {
                 FuzzyIndex *multiple_artist_index = new FuzzyIndex();
-                log("build multiple artist index");
                 multiple_artist_index->build(multiple_ids, multiple_texts);
 
                 std::stringstream ss_multiple;
@@ -581,7 +575,7 @@ class ArtistIndex {
                     cereal::BinaryOutputArchive oarchive(ss_multiple);
                     oarchive(*multiple_artist_index);
                 }
-                log("multiple artist index size: %lu bytes", ss_multiple.str().length());
+                lb_log("multiple artist index size: %lu bytes", ss_multiple.str().length());
                 delete multiple_artist_index;
                 vector<unsigned int>().swap(multiple_ids);
                 vector<string>().swap(multiple_texts);
@@ -591,7 +585,6 @@ class ArtistIndex {
                     SQLite::Database    db(db_file, SQLite::OPEN_READWRITE);
                     SQLite::Statement   query(db, insert_blob_query);
                 
-                    log("save multiple artist index");
                     query.bind(1, MULTIPLE_ARTIST_INDEX_ENTITY_ID);
                     query.bind(2, (const char *)ss_multiple.str().c_str(), (int32_t)ss_multiple.str().length());
                     query.exec();
@@ -602,14 +595,14 @@ class ArtistIndex {
                 }
             }
            
-            log("done building artists indexes.");
+            lb_log("done building artists indexes.");
         }
         
         bool
         load_index(const int entity_id, FuzzyIndex *index) {
             try
             {
-                SQLite::Database      db(db_file);
+                SQLite::Database      db(db_file, SQLite::OPEN_READONLY);
                 SQLite::Statement     query(db, fetch_blob_query);
             
                 query.bind(1, entity_id);

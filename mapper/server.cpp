@@ -30,18 +30,18 @@ MappingSearch* get_mapping_search() {
 }
 
 void print_usage() {
-    log("Usage: server");
-    log("");
-    log("Required environment variables:");
-    log("  INDEX_DIR        Directory containing mapping.db and index files");
-    log("");
-    log("Optional environment variables:");
-    log("  HOST             Hostname/IP to bind to (default: 0.0.0.0)");
-    log("  PORT             Port number to listen on (default: 5000)");
-    log("  TEMPLATE_DIR     Templates directory (default: /mapper/templates)");
-    log("  NUM_THREADS      Number of worker threads (0 = auto, default: 0)");
-    log("  MAX_CACHE_SIZE   Max index cache size in MB (default: 100)");
-    log("  TIMEOUT          Connection timeout in seconds (default: 30)");
+    lb_log("Usage: server");
+    lb_log("");
+    lb_log("Required environment variables:");
+    lb_log("  INDEX_DIR        Directory containing mapping.db and index files");
+    lb_log("");
+    lb_log("Optional environment variables:");
+    lb_log("  HOST             Hostname/IP to bind to (default: 0.0.0.0)");
+    lb_log("  PORT             Port number to listen on (default: 5000)");
+    lb_log("  TEMPLATE_DIR     Templates directory (default: /mapper/templates)");
+    lb_log("  NUM_THREADS      Number of worker threads (0 = auto, default: 0)");
+    lb_log("  MAX_CACHE_SIZE   Max index cache size in MB (default: 100)");
+    lb_log("  TIMEOUT          Connection timeout in seconds (default: 30)");
 }
 
 int main(int argc, char* argv[]) {
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
             print_usage();
             return 0;
         } else {
-            log("Error: Unknown option: %s", arg.c_str());
+            lb_error("Error: Unknown option: %s", arg.c_str());
             print_usage();
             return 1;
         }
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     // Get required INDEX_DIR from environment
     const char* env_index_dir = std::getenv("INDEX_DIR");
     if (!env_index_dir || strlen(env_index_dir) == 0) {
-        log("Error: INDEX_DIR environment variable not set");
+        lb_error("Error: INDEX_DIR environment variable not set");
         print_usage();
         return 1;
     }
@@ -113,10 +113,10 @@ int main(int argc, char* argv[]) {
     g_index_cache = new IndexCache(g_cache_size);
 
     // Load shared indexes BEFORE starting the server
-    log("Loading shared indexes...");
+    lb_log("Loading shared indexes...");
     g_artist_index = new ArtistIndex(g_index_dir);
     g_artist_index->load();
-    log("Indexes loaded. Server ready.");
+    lb_log("Indexes loaded. Server ready.");
     g_ready = true;
 
     crow::SimpleApp app;
@@ -317,24 +317,24 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    log("Starting server on %s:%d", host.c_str(), port);
-    log("Index directory: %s", g_index_dir.c_str());
-    log("Connection timeout: %d seconds", g_timeout);
+    lb_log("Starting server on %s:%d", host.c_str(), port);
+    lb_log("Index directory: %s", g_index_dir.c_str());
+    lb_log("Connection timeout: %d seconds", g_timeout);
     
     // Configure Crow for high performance:
     // - timeout: Increase from default 5s to handle complex queries without 502s
     // - loglevel: Reduce logging overhead in production (Warning level)
     // - signal_clear: Don't install default signal handlers (useful for containers)
     app.timeout(static_cast<std::uint8_t>(g_timeout))
-       .loglevel(crow::LogLevel::Warning)
+       .loglevel(crow::LogLevel::Info)
        .signal_clear();
     
     if (g_num_threads > 0) {
-        log("Using %d threads", g_num_threads);
+        lb_log("Using %d threads", g_num_threads);
         app.bindaddr(host).port(port).concurrency(g_num_threads).run();
     } else {
         unsigned int hw_threads = std::thread::hardware_concurrency();
-        log("Using all available CPU cores (%u threads)", hw_threads);
+        lb_log("Using all available CPU cores (%u threads)", hw_threads);
         app.bindaddr(host).port(port).multithreaded().run();
     }
 

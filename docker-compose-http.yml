@@ -17,4 +17,4 @@ services:
 
 networks:
   http-proxy-network:
-    name: http-proxy-network
+    name: ssl-proxy-network

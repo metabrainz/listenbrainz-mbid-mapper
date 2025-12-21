@@ -83,15 +83,15 @@ void MakeMapping::create() {
     
     // Check if database already exists
     if (std::filesystem::exists(db_file)) {
-        log("Error: Database file already exists: %s", db_file.c_str());
-        log("Please remove the existing database file before creating a new one. Perhaps you didn't mean this? :)");
+        lb_error("Error: Database file already exists: %s", db_file.c_str());
+        lb_error("Please remove the existing database file before creating a new one. Perhaps you didn't mean this? :)");
         throw std::runtime_error("Database file already exists");
     }
     
     // Create SQLite database
     create_sqlite_db(db_file);
     
-    log("Connecting to PostgreSQL...");
+    lb_debug("Connecting to PostgreSQL...");
     
     // Get DB connection string from environment variable
     const char* db_connect = std::getenv("CANONICAL_MUSICBRAINZ_DATA_CONNECT");
@@ -103,17 +103,17 @@ void MakeMapping::create() {
     PGconn *conn = PQconnectdb(db_connect);
     
     if (PQstatus(conn) != CONNECTION_OK) {
-        log("Connection to database failed: %s", PQerrorMessage(conn));
+        lb_error("Connection to database failed: %s", PQerrorMessage(conn));
         PQfinish(conn);
         throw std::runtime_error("PostgreSQL connection failed");
     }
     
-    log("Executing query...");
+    lb_debug("Executing query...");
     
     // Start a transaction for the cursor
     PGresult *result = PQexec(conn, "BEGIN");
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
-        log("BEGIN failed: %s", PQerrorMessage(conn));
+        lb_error("BEGIN failed: %s", PQerrorMessage(conn));
         PQclear(result);
         PQfinish(conn);
         throw std::runtime_error("PostgreSQL BEGIN failed");
@@ -124,14 +124,14 @@ void MakeMapping::create() {
     string cursor_sql = "DECLARE big_cursor CURSOR FOR " + string(MAPPING_QUERY);
     result = PQexec(conn, cursor_sql.c_str());
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
-        log("DECLARE CURSOR failed: %s", PQerrorMessage(conn));
+        lb_error("DECLARE CURSOR failed: %s", PQerrorMessage(conn));
         PQclear(result);
         PQfinish(conn);
         throw std::runtime_error("PostgreSQL DECLARE CURSOR failed");
     }
     PQclear(result);
     
-    log("Writing CSV file...");
+    lb_log("Writing CSV file...");
     ofstream csvfile(csv_file);
     if (!csvfile.is_open()) {
         PQclear(result);
@@ -153,7 +153,6 @@ void MakeMapping::create() {
         result = PQexec(conn, fetch_sql.c_str());
         
         if (PQresultStatus(result) != PGRES_TUPLES_OK) {
-            log("FETCH failed: %s", PQerrorMessage(conn));
             PQclear(result);
             PQfinish(conn);
             throw std::runtime_error("PostgreSQL FETCH failed");
@@ -242,24 +241,20 @@ void MakeMapping::create() {
     
     csvfile.close();
     PQfinish(conn);
-    log("\nWrote %d rows to CSV", row_count);
+    lb_log("\nWrote %d rows to CSV", row_count);
     
-    log("Importing CSV into SQLite...");
+    lb_log("Importing CSV into SQLite...");
     import_csv_to_sqlite(db_file, csv_file);
     
-    log("Creating indexes...");
+    lb_log("Creating indexes...");
     create_indexes(db_file);
     
     // Clean up CSV file
-    if (std::filesystem::remove(csv_file)) {
-        log("Removed temporary CSV file");
-    } else {
-        log("Warning: Could not remove temporary CSV file: %s", csv_file.c_str());
-    }
+    std::filesystem::remove(csv_file);
     
     auto t1 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
-    log("\nLoaded data and saved in %.3f seconds.", duration.count() / 1000.0);
+    lb_log("\nLoaded data and saved in %.3f seconds.", duration.count() / 1000.0);
 }
 
 void MakeMapping::create_sqlite_db(const string& db_file) {
@@ -296,7 +291,7 @@ void MakeMapping::create_sqlite_db(const string& db_file) {
         db.exec("CREATE INDEX entity_id_idx ON index_cache(entity_id)");
         
     } catch (const std::exception& e) {
-        log("SQLite database creation error: %s", e.what());
+        lb_error("SQLite database creation error: %s", e.what());
         throw;
     }
 }
@@ -362,7 +357,7 @@ void MakeMapping::import_csv_to_sqlite(const string& db_file, const string& csv_
             fields.push_back(field);
             
             if (fields.size() != 12) {
-                log("Invalid CSV line (expected 12 fields): %s", line.c_str());
+                lb_error("Invalid CSV line (expected 12 fields): %s", line.c_str());
                 continue;
             }
             
@@ -380,10 +375,10 @@ void MakeMapping::import_csv_to_sqlite(const string& db_file, const string& csv_
                 stmt.bind(11, fields[10]);       // recording_name
                 stmt.bind(12, static_cast<int64_t>(stoul(fields[11]))); // score
             } catch (const std::invalid_argument& e) {
-                log("Invalid integer in CSV line: %s", line.c_str());
+                lb_error("Invalid integer in CSV line: %s", line.c_str());
                 continue;
             } catch (const std::out_of_range& e) {
-                log("Integer out of range in CSV line: %s", line.c_str());
+                lb_error("Integer out of range in CSV line: %s", line.c_str());
                 continue;
             }
             
@@ -400,10 +395,10 @@ void MakeMapping::import_csv_to_sqlite(const string& db_file, const string& csv_
         db.exec("COMMIT");
         csvfile.close();
         
-        log("\nImported %d total rows", count);
+        lb_log("\nImported %d total rows", count);
         
     } catch (const std::exception& e) {
-        log("CSV import error: %s", e.what());
+        lb_error("CSV import error: %s", e.what());
         throw;
     }
 }
@@ -412,25 +407,25 @@ void MakeMapping::create_indexes(const string& db_file) {
     try {
         SQLite::Database db(db_file, SQLite::OPEN_READWRITE);
         
-        log("Creating artist_credit_id index...");
+        lb_log("Creating artist_credit_id index...");
         db.exec("CREATE INDEX artist_credit_id_ndx ON mapping(artist_credit_id)");
         
-        log("Creating release_artist_credit_id index...");
+        lb_log("Creating release_artist_credit_id index...");
         db.exec("CREATE INDEX release_artist_credit_id_ndx ON mapping(release_artist_credit_id)");
         
-        log("Creating release_id index...");
+        lb_log("Creating release_id index...");
         db.exec("CREATE INDEX release_id_ndx ON mapping(release_id)");
         
-        log("Creating recording_id index...");
+        lb_log("Creating recording_id index...");
         db.exec("CREATE INDEX recording_id_ndx ON mapping(recording_id)");
         
-        log("Creating release_id_recording_id composite index...");
+        lb_log("Creating release_id_recording_id composite index...");
         db.exec("CREATE INDEX release_id_recording_id_ndx ON mapping(release_id, recording_id)");
         
-        log("All indexes created successfully");
+        lb_log("All indexes created successfully");
         
     } catch (const std::exception& e) {
-        log("Index creation error: %s", e.what());
+        lb_error("Index creation error: %s", e.what());
         throw;
     }
 }
@@ -459,11 +454,11 @@ string MakeMapping::escape_csv_field(const string& field) {
 }
 
 void print_usage() {
-    log("Usage: make_mapping");
-    log("");
-    log("Required environment variables:");
-    log("  INDEX_DIR                         Directory to create mapping.db in");
-    log("  CANONICAL_MUSICBRAINZ_DATA_CONNECT  PostgreSQL connection string");
+    lb_log("Usage: make_mapping");
+    lb_log("");
+    lb_log("Required environment variables:");
+    lb_log("  INDEX_DIR                         Directory to create mapping.db in");
+    lb_log("  CANONICAL_MUSICBRAINZ_DATA_CONNECT  PostgreSQL connection string");
 }
 
 int main(int argc, char *argv[])
@@ -501,9 +496,6 @@ int main(int argc, char *argv[])
         return -1;
     }
     
-
-
-    
     try {
         MakeMapping importer(index_dir);
         importer.create();
@@ -512,8 +504,5 @@ int main(int argc, char *argv[])
         log("Error: %s", e.what());
         return -1;
     }
-    
-
-    
     return 0;
 }

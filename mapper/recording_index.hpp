@@ -63,7 +63,7 @@ class RecordingIndex {
        
         void
         load_recording_aliases() {
-            log("load recording aliases");
+            lb_log("load recording aliases");
             try
             {
                 PGconn     *conn;
@@ -75,7 +75,7 @@ class RecordingIndex {
                 }
                 conn = PQconnectdb(db_connect);
                 if (PQstatus(conn) != CONNECTION_OK) {
-                    log("Connection to database failed: %s", PQerrorMessage(conn));
+                    lb_error("Connection to database failed: %s", PQerrorMessage(conn));
                     PQfinish(conn);
                     throw std::runtime_error("PostgreSQL connection failed");
                 }
@@ -167,7 +167,7 @@ class RecordingIndex {
             }
             catch (std::exception& e)
             {
-                log("build rec index db exception: %s", e.what());
+                lb_error("build rec index db exception: %s", e.what());
             }
             
             vector<string>       recording_texts(recording_string_index_map.size());
@@ -223,7 +223,7 @@ class RecordingIndex {
             }
             catch(const std::exception& e)
             {
-                log("artist_credit %d: Recording index build error: '%s'", artist_credit_id, e.what());
+                lb_error("artist_credit %d: Recording index build error: '%s'", artist_credit_id, e.what());
             }
 
             vector<string>       release_texts(release_string_index_map.size());
@@ -240,7 +240,7 @@ class RecordingIndex {
             }
             catch(const std::exception& e)
             {
-                log("artist_credit %d: release index build error: '%s'", artist_credit_id, e.what());
+                lb_error("artist_credit %d: release index build error: '%s'", artist_credit_id, e.what());
             }
             
             // Sort each vector of ReleaseRecordingLink by release_id
@@ -279,7 +279,7 @@ class RecordingIndex {
                     }
                     return new ReleaseRecordingIndex(recording_index, release_index, links);
                 } else {
-                    log("Cannot load index for %d", artist_credit_id);
+                    lb_error("Cannot load index for %d", artist_credit_id);
                     delete recording_index;
                     delete release_index;
                     return nullptr;
@@ -287,7 +287,7 @@ class RecordingIndex {
             }
             catch (std::exception& e)
             {
-                log("load rec index db exception: %s", e.what());
+                lb_error("load rec index db exception: %s", e.what());
                 delete recording_index;
                 delete release_index;
             }
@@ -297,7 +297,7 @@ class RecordingIndex {
         // Load with internal DB connection (for standalone tools)
         ReleaseRecordingIndex *
         load(const int artist_credit_id) {
-            SQLite::Database db(db_file);
+            SQLite::Database db(db_file, SQLite::OPEN_READONLY);
             return load(artist_credit_id, db);
         }
 };

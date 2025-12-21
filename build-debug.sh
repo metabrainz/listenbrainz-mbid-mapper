@@ -3,7 +3,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="$SCRIPT_DIR/mapper/build"
+BUILD_DIR="$SCRIPT_DIR/build"
 
 if [ -d "$BUILD_DIR" ]; then
     echo "Error: Build directory already exists: $BUILD_DIR"
@@ -26,7 +26,7 @@ cmake -DCMAKE_BUILD_TYPE=Debug \
       -DBUILD_SANDBOX=OFF \
       -DWITH_WERROR=OFF \
       -DSKIP_PERFORMANCE_COMPARISON=ON \
-      ..
+      ../mapper
 
 # Build pcre2 first to generate pcre2.h header (needed by jpcre2)
 make pcre2-8-static

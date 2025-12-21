@@ -45,7 +45,7 @@ class SearchFunctions {
         // Lazy initialization of DB connection
         SQLite::Database& get_db() {
             if (!db) {
-                db = std::make_unique<SQLite::Database>(db_file);
+                db = std::make_unique<SQLite::Database>(db_file, SQLite::OPEN_READONLY);
             }
             return *db;
         }
@@ -79,7 +79,7 @@ class SearchFunctions {
         fetch_metadata(SearchMatch *result) {
             string query;
             
-            log("fetch metadata %d %d %d", result->artist_credit_id, result->release_id, result->recording_id);
+            lb_log("fetch metadata %d %d %d", result->artist_credit_id, result->release_id, result->recording_id);
             
             if (result->release_id)
                 query = string(fetch_metadata_query);
@@ -177,10 +177,10 @@ class SearchFunctions {
                        const string          &release_name) {
 
             // Improve thresholding
-            log("    RELEASE SEARCH");
+            lb_debug("    RELEASE SEARCH");
             auto release_name_encoded = encode.encode_string(release_name); 
             if (release_name_encoded.size() == 0) {
-                log("    release name contains no word characters.");
+                lb_debug("    release name contains no word characters.");
                 return nullptr;
             }
 
@@ -193,11 +193,11 @@ class SearchFunctions {
                 
                 for(auto &result : *rel_results) {
                     string text = release_recording_index->release_index->get_index_text(result.result_index);
-                    log("      %.2f %-8u %-8d %s", result.confidence, result.id, result.result_index, text.c_str());
+                    lb_debug("      %.2f %-8u %-8d %s", result.confidence, result.id, result.result_index, text.c_str());
                 }     
             }
             else    
-                log("    no release matches, ignoring release.");
+                lb_debug("    no release matches, ignoring release.");
 
             return rel_results;
         }
@@ -206,10 +206,10 @@ class SearchFunctions {
         recording_search(ReleaseRecordingIndex *release_recording_index, 
                          const string          &recording_name) {
 
-            log("    RECORDING SEARCH");
+            lb_debuglog("    RECORDING SEARCH");
             auto recording_name_encoded = encode.encode_string(recording_name); 
             if (recording_name_encoded.size() == 0) {
-                log("    recording name contains no word characters.");
+                lb_debuglog("    recording name contains no word characters.");
                 return nullptr;
             }
 
@@ -222,10 +222,10 @@ class SearchFunctions {
                 
                 for(auto &result : *rec_results) {
                     string text = release_recording_index->recording_index->get_index_text(result.result_index);
-                    log("      %.2f %-8u %s", result.confidence, result.id, text.c_str());
+                    lb_log("      %.2f %-8u %s", result.confidence, result.id, text.c_str());
                 }
             } else {
-                log("      No recording results.");
+                lb_log("      No recording results.");
             }
 
             return rec_results;
@@ -268,7 +268,7 @@ class SearchFunctions {
                     break; // Found the recording, no need to continue searching
                 }
             }  
-            log("found no link between recording and release");
+            lb_log("found no link between recording and release");
             return nullptr;
         }
 };

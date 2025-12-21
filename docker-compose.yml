@@ -16,8 +16,6 @@ services:
     environment:
       - VIRTUAL_HOST=mapper.listenbrainz.org
       - VIRTUAL_PORT=5000
-      - LETSENCRYPT_HOST=mapper.listenbrainz.org
-      - LETSENCRYPT_EMAIL=rob@metabrainz.org
     expose:
       - "5000"
     ports:

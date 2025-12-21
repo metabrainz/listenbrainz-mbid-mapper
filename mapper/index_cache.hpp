@@ -10,6 +10,8 @@ using namespace std;
 const int SLEEP_DELAY = 30;
 const float CLEANING_TARGET_RATIO = 0.9;
 
+// Trim can cause problems!
+
 class IndexCache {
     private:
         map<unsigned int, ReleaseRecordingIndex *> index;
@@ -125,7 +127,7 @@ class IndexCache {
         
         void cache_cleaner() {
             long baseline = get_memory_footprint();
-            log("%luMB available for index cache", max_memory_usage - baseline);
+            lb_log("%luMB available for index cache", max_memory_usage - baseline);
 
             while(!stop) {
                 for(int i = 0; i < SLEEP_DELAY && !stop; i++)
