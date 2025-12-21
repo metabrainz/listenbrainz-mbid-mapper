@@ -473,7 +473,7 @@ int main(int argc, char *argv[])
             print_usage();
             return 0;
         } else {
-            log("Error: Unknown option: %s", arg.c_str());
+            lb_error("Error: Unknown option: %s", arg.c_str());
             print_usage();
             return -1;
         }
@@ -482,7 +482,7 @@ int main(int argc, char *argv[])
     // Get required INDEX_DIR from environment
     const char* env_index_dir = std::getenv("INDEX_DIR");
     if (!env_index_dir || strlen(env_index_dir) == 0) {
-        log("Error: INDEX_DIR environment variable not set");
+        lb_error("Error: INDEX_DIR environment variable not set");
         print_usage();
         return -1;
     }
@@ -491,7 +491,7 @@ int main(int argc, char *argv[])
     // Validate CANONICAL_MUSICBRAINZ_DATA_CONNECT is set
     const char* db_connect = std::getenv("CANONICAL_MUSICBRAINZ_DATA_CONNECT");
     if (!db_connect || strlen(db_connect) == 0) {
-        log("Error: CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable not set");
+        lb_error("Error: CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable not set");
         print_usage();
         return -1;
     }
@@ -499,9 +499,9 @@ int main(int argc, char *argv[])
     try {
         MakeMapping importer(index_dir);
         importer.create();
-        log("Mapping import completed successfully!");
+        lb_log("Mapping import completed successfully!");
     } catch (const std::exception& e) {
-        log("Error: %s", e.what());
+        lb_error("Error: %s", e.what());
         return -1;
     }
     return 0;

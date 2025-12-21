@@ -52,18 +52,18 @@ lookup(const string &artist_credit_name, const string &release_name, const strin
     SearchMatch *result = mapping_search->search(artist_credit_name, release_name, recording_name);
     if (!result) {
         tuple<string, string, string> ret = { string(), string(), string() };
-        log("no matches");
+        lb_log("no matches");
         return ret; 
     }
-    log("%-8d %s %s", 
+    lb_log("%-8d %s %s", 
         result->artist_credit_id,
         join(result->artist_credit_mbids, string(",")).c_str(),
         result->artist_credit_name.c_str());
-    log("%-8d %s %s", 
+    lb_log("%-8d %s %s", 
         result->release_id,
         result->release_mbid.c_str(),
         result->release_name.c_str());
-    log("%-8d %s %s\n", 
+    lb_log("%-8d %s %s\n", 
         result->recording_id,
         result->recording_mbid.c_str(),
         result->recording_name.c_str());
@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
     init_logging();
     
     if (argc < 2) {
-        log("Usage: mapping_tests <index_dir>");
+        lb_log("Usage: mapping_tests <index_dir>");
         return -1;
     }
     

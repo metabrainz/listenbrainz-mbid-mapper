@@ -206,7 +206,7 @@ class MappingSearch {
                     current_state = transitions[i].end_state;
                     
                     if (state_functions[current_state] != nullptr) {
-                        debug("current %-30s event %-25s new %-30s", 
+                        lb_debug("current %-30s event %-25s new %-30s", 
                              get_state_name(old_state), 
                              get_event_name(event),
                              get_state_name(current_state));
@@ -223,7 +223,7 @@ class MappingSearch {
                 }
             }
             
-            log_error("ERROR: No valid transition found from %s with %s", 
+            lb_error("ERROR: No valid transition found from %s with %s", 
                 get_state_name(current_state), 
                 get_event_name(event));
             return false;
@@ -279,7 +279,7 @@ class MappingSearch {
             if (artist_matches != nullptr)
                 delete artist_matches;
 
-            log_debug("ARTIST SEARCH: '%s' (%s)", artist_credit_name.c_str(), current_artist_credit_name.c_str());
+            lb_debug("ARTIST SEARCH: '%s' (%s)", artist_credit_name.c_str(), current_artist_credit_name.c_str());
             auto start = std::chrono::high_resolution_clock::now();
             artist_matches = artist_index->single_artist_index->search(current_artist_credit_name, artist_threshold, 's');
             auto multiple_artist_matches = artist_index->multiple_artist_index->search(current_artist_credit_name, artist_threshold, 'm');
@@ -387,7 +387,7 @@ class MappingSearch {
 
             delete recording_matches;
             auto start = std::chrono::high_resolution_clock::now();
-            recording_matches = search_functions->recording_search(release_recording_index.get(), recording_name); 
+            recording_matches = search_functions->recording_search(release_recording_index, recording_name); 
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
             lb_log("Recording search took %ld ms", duration.count());

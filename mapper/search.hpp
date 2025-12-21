@@ -206,10 +206,10 @@ class SearchFunctions {
         recording_search(ReleaseRecordingIndex *release_recording_index, 
                          const string          &recording_name) {
 
-            lb_debuglog("    RECORDING SEARCH");
+            lb_debug("    RECORDING SEARCH");
             auto recording_name_encoded = encode.encode_string(recording_name); 
             if (recording_name_encoded.size() == 0) {
-                lb_debuglog("    recording name contains no word characters.");
+                lb_debug("    recording name contains no word characters.");
                 return nullptr;
             }
 
