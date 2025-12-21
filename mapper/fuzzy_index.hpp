@@ -122,13 +122,14 @@ class FuzzyIndex {
         search(const string &query_string, float min_confidence, char source) {
             vector<string> text_data;
             similarity::ObjectVector data;
-            vector<IndexResult> *results = new vector<IndexResult>;
             
             if (index == nullptr) {
                 printf("No index available.\n");
                 fflush(stdout);
                 return nullptr;
             }
+            
+            vector<IndexResult> *results = new vector<IndexResult>;
 
             text_data.push_back(query_string.substr(0, MAX_ENCODED_STRING_LENGTH));
             arma::sp_mat matrix = vectorizer.transform(text_data);

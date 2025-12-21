@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# To leak detect
+#  ASAN_OPTIONS=detect_leaks=1 ./build/server
 
 set -e
 
@@ -19,7 +22,9 @@ cd "$BUILD_DIR"
 
 cmake -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-      -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++" \
+      -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+      -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+      -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address -static-libgcc -static-libstdc++" \
       -DBUILD_SHARED_LIBS=OFF \
       -DBUILD_TESTING=OFF \
       -DWITHOUT_TESTS=ON \

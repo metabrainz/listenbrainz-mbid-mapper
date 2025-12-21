@@ -5,11 +5,24 @@
 #include <atomic>
 #include <iomanip>
 #include <sstream>
+#include <csignal>
+#include <memory>
 #include "crow.h"
 #include "fsm.hpp"
 #include "test_cases.hpp"
 
 using namespace std;
+
+// Global app pointer for signal handler
+static crow::SimpleApp* g_app = nullptr;
+
+// Signal handler for graceful shutdown
+void signal_handler(int signum) {
+    lb_log("Received signal %d, shutting down gracefully...", signum);
+    if (g_app) {
+        g_app->stop();
+    }
+}
 
 // Shared resources (created once, shared across all threads)
 static string g_index_dir = "/data";
@@ -22,11 +35,12 @@ static IndexCache* g_index_cache = nullptr;
 static std::atomic<bool> g_ready{false};
 
 MappingSearch* get_mapping_search() {
-    thread_local MappingSearch* mapping_search = nullptr;
-    if (mapping_search == nullptr) {
-        mapping_search = new MappingSearch(g_index_dir, g_artist_index, g_index_cache);
+    // Use unique_ptr so the MappingSearch is properly deleted when the thread exits
+    thread_local std::unique_ptr<MappingSearch> mapping_search;
+    if (!mapping_search) {
+        mapping_search = std::make_unique<MappingSearch>(g_index_dir, g_artist_index, g_index_cache);
     }
-    return mapping_search;
+    return mapping_search.get();
 }
 
 void print_usage() {
@@ -116,7 +130,12 @@ int main(int argc, char* argv[]) {
     g_artist_index->load();
     
     crow::SimpleApp app;
+    g_app = &app;  // Store for signal handler
     crow::mustache::set_global_base(g_templates_dir);
+    
+    // Register signal handlers for graceful shutdown (needed for ASan leak reports)
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
 
     // Create index cache
     g_index_cache = new IndexCache(g_cache_size);

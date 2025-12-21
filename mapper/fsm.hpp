@@ -370,10 +370,14 @@ class MappingSearch {
                 selected_artist_credit_id = (*artist_matches)[artist_match_index].id;
                 lb_debug("artist credit id selected: %u", selected_artist_credit_id);
 
-                // Invalidate the current recording matches
+                // Invalidate the current recording and release matches when switching artists
                 recording_match_index  = -1;
                 delete recording_matches;
                 recording_matches = nullptr;
+                
+                release_match_index = -1;
+                delete release_matches;
+                release_matches = nullptr;
 
 #if 0  // Cache disabled for memory debugging
                 // Release cache reference for old artist's index
