@@ -159,7 +159,7 @@ class SearchFunctions {
 
         ReleaseRecordingIndex *
         load_recording_release_index(unsigned int artist_credit_id) {
-            
+#if 0  // Cache disabled for memory debugging
             auto release_recording_index = index_cache->get(artist_credit_id);
             if (!release_recording_index) {
                 RecordingIndex rec_index(index_dir);
@@ -167,10 +167,15 @@ class SearchFunctions {
                 if (release_recording_index == nullptr)
                     return nullptr;
                 // Use returned pointer - another thread may have added it first
-                release_recording_index = index_cache->add(artist_credit_id, release_recording_index);
+                index_cache->add(artist_credit_id, release_recording_index);
             }
 
             return release_recording_index;
+#else
+            // Direct load without cache - caller owns the returned pointer
+            RecordingIndex rec_index(index_dir);
+            return rec_index.load(artist_credit_id, get_db());
+#endif
         }
 
         vector<IndexResult> *

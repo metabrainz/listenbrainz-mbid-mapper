@@ -256,12 +256,18 @@ class MappingSearch {
             delete recording_matches;
             recording_matches = nullptr;
 
+#if 0  // Cache disabled for memory debugging
             // Release cache reference if we have one
             if (release_recording_index != nullptr) {
                 index_cache->release(cached_artist_credit_id);
                 release_recording_index = nullptr;
                 cached_artist_credit_id = 0;
             }
+#else
+            // Direct delete - we own the pointer (cache disabled)
+            delete release_recording_index;
+            release_recording_index = nullptr;
+#endif
 
             delete search_match;
             search_match = nullptr;
@@ -369,12 +375,18 @@ class MappingSearch {
                 delete recording_matches;
                 recording_matches = nullptr;
 
+#if 0  // Cache disabled for memory debugging
                 // Release cache reference for old artist's index
                 if (release_recording_index != nullptr) {
                     index_cache->release(cached_artist_credit_id);
                     release_recording_index = nullptr;
                     cached_artist_credit_id = 0;
                 }
+#else
+                // Direct delete - we own the pointer (cache disabled)
+                delete release_recording_index;
+                release_recording_index = nullptr;
+#endif
 
                 return enter_transition(event_meets_threshold);
             }

@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
 
     // Create index cache
     g_index_cache = new IndexCache(g_cache_size);
-    g_index_cache->start();
+    //g_index_cache->start();
 
     g_ready = true;
     lb_log("Indexes loaded. Server ready.");
