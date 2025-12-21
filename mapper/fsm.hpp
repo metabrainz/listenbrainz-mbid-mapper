@@ -149,6 +149,7 @@ class MappingSearch {
     unsigned int                        selected_artist_credit_id;
     unsigned int                        selected_recording_id;
     unsigned int                        selected_release_id;
+    unsigned int                        cached_artist_credit_id;  // tracks which artist's index is in release_recording_index
     int                                 current_state;
     bool                                has_cleaned_artist, artist_name_cleaned;
     ReleaseRecordingIndex              *release_recording_index;
@@ -172,6 +173,7 @@ class MappingSearch {
             recording_matches = nullptr;
             search_match = nullptr;
             release_recording_index = nullptr;
+            cached_artist_credit_id = 0;
 
             reset_state_variables();
             
@@ -254,8 +256,12 @@ class MappingSearch {
             delete recording_matches;
             recording_matches = nullptr;
 
-            // don't delete indexes -- the cache owns the objects
-            release_recording_index = nullptr;
+            // Release cache reference if we have one
+            if (release_recording_index != nullptr) {
+                index_cache->release(cached_artist_credit_id);
+                release_recording_index = nullptr;
+                cached_artist_credit_id = 0;
+            }
 
             delete search_match;
             search_match = nullptr;
@@ -363,8 +369,12 @@ class MappingSearch {
                 delete recording_matches;
                 recording_matches = nullptr;
 
-                // don't delete the index, its owned by the cache
-                release_recording_index = nullptr;
+                // Release cache reference for old artist's index
+                if (release_recording_index != nullptr) {
+                    index_cache->release(cached_artist_credit_id);
+                    release_recording_index = nullptr;
+                    cached_artist_credit_id = 0;
+                }
 
                 return enter_transition(event_meets_threshold);
             }
@@ -383,6 +393,7 @@ class MappingSearch {
                     lb_debug("Failed to load recording index for artist credit %u", selected_artist_credit_id);
                     return enter_transition(event_no_matches);
                 }
+                cached_artist_credit_id = selected_artist_credit_id;
             }
 
             delete recording_matches;

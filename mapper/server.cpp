@@ -101,6 +101,7 @@ int main(int argc, char* argv[]) {
         g_cache_size = atoi(env_cache_size);
         if (g_cache_size < 1) g_cache_size = 100;
     }
+    lb_log("Max index cache size: %d MB", g_cache_size);
     
     const char* env_timeout = std::getenv("TIMEOUT");
     if (env_timeout && strlen(env_timeout) > 0) {
@@ -109,18 +110,20 @@ int main(int argc, char* argv[]) {
         if (g_timeout > 255) g_timeout = 255;  // Crow uses uint8_t
     }
 
-    // Create index cache immediately (lightweight)
-    g_index_cache = new IndexCache(g_cache_size);
-
     // Load shared indexes BEFORE starting the server
     lb_log("Loading shared indexes...");
     g_artist_index = new ArtistIndex(g_index_dir);
     g_artist_index->load();
-    lb_log("Indexes loaded. Server ready.");
-    g_ready = true;
-
+    
     crow::SimpleApp app;
     crow::mustache::set_global_base(g_templates_dir);
+
+    // Create index cache
+    g_index_cache = new IndexCache(g_cache_size);
+    g_index_cache->start();
+
+    g_ready = true;
+    lb_log("Indexes loaded. Server ready.");
 
     CROW_ROUTE(app, "/")
     ([](const crow::request& req) {
