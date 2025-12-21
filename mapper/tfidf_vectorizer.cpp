@@ -197,8 +197,22 @@ arma::sp_mat TfIdfVectorizer::transform(std::vector<std::string>& documents)
         for (auto & itr : tf_hash)
         {
             word = itr.first;
-            w = this->vocabulary_[word];
-            idf = this->idf_[word];
+            
+            // Use find() instead of operator[] to avoid modifying vocabulary_ (thread-safety)
+            auto vocab_it = this->vocabulary_.find(word);
+            if (vocab_it == this->vocabulary_.end()) {
+                // Skip words not in vocabulary
+                continue;
+            }
+            w = vocab_it->second;
+            
+            auto idf_it = this->idf_.find(word);
+            if (idf_it == this->idf_.end()) {
+                // Skip words without IDF
+                continue;
+            }
+            idf = idf_it->second;
+            
             if (itr.second > 0)
                 nonzero++;
             else
@@ -207,7 +221,7 @@ arma::sp_mat TfIdfVectorizer::transform(std::vector<std::string>& documents)
                 X_transformed(w, d) = itr.second * idf;
             }
             else
-                X_transformed(w, d) = (tf_hash[word] > 0) ? 1 : 0;
+                X_transformed(w, d) = (itr.second > 0) ? 1 : 0;
         }
     }
 

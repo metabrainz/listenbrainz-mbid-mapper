@@ -17,7 +17,7 @@ class IndexCache {
         map<unsigned int, ReleaseRecordingIndex *> index;
         map<unsigned int, time_t>                  last_accessed;
         mutex                                      mtx;
-        thread                                    *cleaner_thread;
+//        thread                                    *cleaner_thread;
         int                                        max_memory_usage; // in MB
         int                                        cleaning_target; // in MB
         bool                                       stop;
@@ -27,18 +27,18 @@ class IndexCache {
         // Memory usage is specified in MB
         IndexCache(int max_memory_usage_) { 
             stop = false;
-            cleaner_thread = nullptr;
+//            cleaner_thread = nullptr;
             max_memory_usage = max_memory_usage_;
             cleaning_target = (int)(max_memory_usage * CLEANING_TARGET_RATIO);
         }
         
         ~IndexCache() {
-            if (cleaner_thread) {
-                stop = true;
-                cleaner_thread->join();
-                delete cleaner_thread;
-            }
-            clear();
+//            if (cleaner_thread) {
+//                stop = true;
+//                cleaner_thread->join();
+//                delete cleaner_thread;
+//            }
+//            clear();
         }
         
         void
@@ -67,10 +67,11 @@ class IndexCache {
             assert(false);
         }
         
+#if 0        
         void
         trim() {
             long start_use = get_memory_footprint();
-            printf("Cache trim starting: %ldMB in use\n", start_use);
+            lb_log("Cache trim starting: %ldMB in use\n", start_use);
             mtx.lock();
             for(; index.size();) {
                 vector<std::pair<unsigned int, time_t>> access_times(last_accessed.begin(), last_accessed.end());
@@ -88,28 +89,32 @@ class IndexCache {
                 
                 long current_use = get_memory_footprint();
                 if (current_use <= cleaning_target) {
-                    printf("Cache trim complete: %ldMB in use (freed %ldMB)\n", current_use, start_use - current_use);
+                    lb_log("Cache trim complete: %ldMB in use (freed %ldMB)\n", current_use, start_use - current_use);
                     return;
                 }
                 mtx.lock();
             }
             mtx.unlock();
         }
+#endif       
         
-        // Cache takes ownership of data. Caller must not delete it.
-        void
+        // Cache takes ownership of data. Returns the cached pointer (which may differ from input
+        // if another thread already added this entry). Caller must use the returned pointer.
+        ReleaseRecordingIndex *
         add(unsigned int artist_credit_id, ReleaseRecordingIndex *data) {
             mtx.lock();
             auto iter = index.find(artist_credit_id);
             if (iter != index.end()) {
-                // Already in cache - delete the new one, keep existing
+                // Already in cache - delete the new one, return existing
                 delete data;
+                data = iter->second;
             } else {
                 index[artist_credit_id] = data;
                 time_t cur_time = std::chrono::system_clock::to_time_t(chrono::system_clock::now());
                 last_accessed[artist_credit_id] = cur_time;
             }
             mtx.unlock();
+            return data;
         }
 
         // Returns pointer to cached data. Caller must NOT delete it - cache owns the memory.
@@ -129,6 +134,7 @@ class IndexCache {
             return data;
         }
         
+#if 0        
         void cache_cleaner() {
             long baseline = get_memory_footprint();
             lb_log("%luMB available for index cache", max_memory_usage - baseline);
@@ -143,7 +149,6 @@ class IndexCache {
                     trim();
             }
         }
-        
         void start() {
             cleaner_thread = new thread(IndexCache::_start_cache_cleaner, this);
         }
@@ -151,4 +156,5 @@ class IndexCache {
         static void _start_cache_cleaner(IndexCache *obj) {
             obj->cache_cleaner();
         }
+#endif
 };

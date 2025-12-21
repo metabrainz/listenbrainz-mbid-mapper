@@ -166,7 +166,8 @@ class SearchFunctions {
                 release_recording_index = rec_index.load(artist_credit_id, get_db());
                 if (release_recording_index == nullptr)
                     return nullptr;
-                index_cache->add(artist_credit_id, release_recording_index);
+                // Use returned pointer - another thread may have added it first
+                release_recording_index = index_cache->add(artist_credit_id, release_recording_index);
             }
 
             return release_recording_index;
