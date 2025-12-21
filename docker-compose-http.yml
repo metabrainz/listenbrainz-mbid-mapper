@@ -1,0 +1,19 @@
+name: http-proxy
+
+services:
+
+  nginx:
+    image: jwilder/nginx-proxy
+    container_name: nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./proxy.conf:/etc/nginx/conf.d/proxy.conf:ro
+    networks:
+      - http-proxy-network
+
+networks:
+  http-proxy-network:
+    name: http-proxy-network
