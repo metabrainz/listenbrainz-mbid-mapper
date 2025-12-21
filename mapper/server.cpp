@@ -16,6 +16,7 @@ static string g_index_dir = "/data";
 static string g_templates_dir = "/mapper/templates";
 static int g_cache_size = 100;  // in MB
 static int g_num_threads = 0;  // 0 = use all available cores
+static int g_timeout = 30;  // connection timeout in seconds (default Crow is 5, too short for complex queries)
 static ArtistIndex* g_artist_index = nullptr;
 static IndexCache* g_index_cache = nullptr;
 static std::atomic<bool> g_ready{false};
@@ -40,6 +41,7 @@ void print_usage() {
     log("  TEMPLATE_DIR     Templates directory (default: /mapper/templates)");
     log("  NUM_THREADS      Number of worker threads (0 = auto, default: 0)");
     log("  MAX_CACHE_SIZE   Max index cache size in MB (default: 100)");
+    log("  TIMEOUT          Connection timeout in seconds (default: 30)");
 }
 
 int main(int argc, char* argv[]) {
@@ -98,6 +100,13 @@ int main(int argc, char* argv[]) {
     if (env_cache_size && strlen(env_cache_size) > 0) {
         g_cache_size = atoi(env_cache_size);
         if (g_cache_size < 1) g_cache_size = 100;
+    }
+    
+    const char* env_timeout = std::getenv("TIMEOUT");
+    if (env_timeout && strlen(env_timeout) > 0) {
+        g_timeout = atoi(env_timeout);
+        if (g_timeout < 1) g_timeout = 30;
+        if (g_timeout > 255) g_timeout = 255;  // Crow uses uint8_t
     }
 
     // Create index cache immediately (lightweight)
@@ -310,11 +319,22 @@ int main(int argc, char* argv[]) {
 
     log("Starting server on %s:%d", host.c_str(), port);
     log("Index directory: %s", g_index_dir.c_str());
+    log("Connection timeout: %d seconds", g_timeout);
+    
+    // Configure Crow for high performance:
+    // - timeout: Increase from default 5s to handle complex queries without 502s
+    // - loglevel: Reduce logging overhead in production (Warning level)
+    // - signal_clear: Don't install default signal handlers (useful for containers)
+    app.timeout(static_cast<std::uint8_t>(g_timeout))
+       .loglevel(crow::LogLevel::Warning)
+       .signal_clear();
+    
     if (g_num_threads > 0) {
         log("Using %d threads", g_num_threads);
         app.bindaddr(host).port(port).concurrency(g_num_threads).run();
     } else {
-        log("Using all available CPU cores");
+        unsigned int hw_threads = std::thread::hardware_concurrency();
+        log("Using all available CPU cores (%u threads)", hw_threads);
         app.bindaddr(host).port(port).multithreaded().run();
     }
 

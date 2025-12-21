@@ -14,6 +14,7 @@ services:
       - /var/run/docker.sock:/tmp/docker.sock:ro
       - vhost:/etc/nginx/vhost.d
       - html:/usr/share/nginx/html
+      - ./proxy.conf:/etc/nginx/conf.d/proxy.conf:ro
     labels:
       - com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy
     networks:
