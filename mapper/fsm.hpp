@@ -467,6 +467,7 @@ class MappingSearch {
                 return enter_transition(event_has_matches);
 
             // set release_match by looking up canonical release given artist and recording
+            delete release_matches;
             release_matches = search_functions->get_canonical_release_id(selected_artist_credit_id, selected_recording_id);
             if (release_matches == nullptr)
                 return enter_transition(event_no_matches);
@@ -479,6 +480,7 @@ class MappingSearch {
         
         bool do_evaluate_match() {
             // select the right link between recording and release
+            delete search_match;
             search_match = search_functions->find_match(selected_artist_credit_id,
                                                         release_recording_index, 
                                                         &(*release_matches)[release_match_index],

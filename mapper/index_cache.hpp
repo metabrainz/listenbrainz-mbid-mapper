@@ -17,8 +17,10 @@ struct CacheEntry {
     ReleaseRecordingIndex *data;
     atomic<int>            ref_count;
     time_t                 last_accessed;
+    size_t                 estimated_size;   // estimated memory size in bytes
     
-    CacheEntry(ReleaseRecordingIndex *d) : data(d), ref_count(0), last_accessed(0) {}
+    CacheEntry(ReleaseRecordingIndex *d, size_t size = 0) 
+        : data(d), ref_count(0), last_accessed(0), estimated_size(size) {}
 };
 
 class IndexCache {
@@ -26,20 +28,22 @@ class IndexCache {
         map<unsigned int, CacheEntry*>  index;
         mutex                           mtx;
         thread                         *cleaner_thread;
-        long                            baseline;         // memory usage before cache starts
-        int                             max_memory_usage; // in MB
-        int                             cleaning_target;  // in MB
+        atomic<size_t>                  total_estimated_size;  // total estimated bytes in cache
+        size_t                          max_cache_bytes;       // max cache size in bytes
+        size_t                          target_cache_bytes;    // target after cleaning
         atomic<bool>                    stop;
 
     public:
 
         // Memory usage is specified in MB
-        IndexCache(int max_memory_usage_) { 
+        IndexCache(int max_memory_mb) { 
             stop = false;
             cleaner_thread = nullptr;
-            baseline = 0;
-            max_memory_usage = max_memory_usage_;
-            cleaning_target = (int)(max_memory_usage * CLEANING_TARGET_RATIO);
+            total_estimated_size = 0;
+            max_cache_bytes = (size_t)max_memory_mb * 1024 * 1024;
+            target_cache_bytes = (size_t)(max_cache_bytes * CLEANING_TARGET_RATIO);
+            lb_log("Index cache created: max %zuMB, target %zuMB", 
+                   max_cache_bytes / (1024*1024), target_cache_bytes / (1024*1024));
         }
         
         ~IndexCache() {
@@ -50,11 +54,6 @@ class IndexCache {
             }
             clear();
         }
-       
-        void
-        save_baseline() {
-            baseline = get_memory_footprint();  // Capture just before we start serving
-        }
         
         void
         clear() {
@@ -64,39 +63,26 @@ class IndexCache {
                 delete item.second;
             }
             index.clear();
+            total_estimated_size = 0;
         }
         
-        long get_memory_footprint() {
-            std::ifstream status_file("/proc/self/status");
-            std::string line;
-            while (std::getline(status_file, line)) {
-                if (line.rfind("VmRSS:", 0) == 0) {
-                    std::string value;
-                    std::istringstream iss(line);
-                    std::string key, unit;
-                    long rss_kb;
-                    iss >> key >> rss_kb >> unit;
-                    return rss_kb / 1024; // return a value in MB
-                }
-            }
-            assert(false);
+        size_t get_estimated_size() const {
+            return total_estimated_size.load();
         }
         
         void
         trim() {
-            long start_use = get_memory_footprint();
-            long start_cache_use = start_use - baseline;
-            lb_log("Cache trim starting: %ldMB total (%ldMB cache), target %dMB cache", 
-                   start_use, start_cache_use, cleaning_target);
+            size_t start_size = total_estimated_size.load();
+            lb_log("Cache trim starting: %zuMB estimated, target %zuMB", 
+                   start_size / (1024*1024), target_cache_bytes / (1024*1024));
             
-            // Phase 1: Build candidate list - lock briefly for each item
-            // This is a snapshot - entries may change state before we try to delete them
-            vector<pair<unsigned int, time_t>> candidates;
+            // Phase 1: Build candidate list with sizes - lock briefly
+            vector<tuple<unsigned int, time_t, size_t>> candidates;
             {
                 lock_guard<mutex> lock(mtx);
                 for (const auto &item : index) {
                     if (item.second->ref_count == 0) {
-                        candidates.push_back({item.first, item.second->last_accessed});
+                        candidates.push_back({item.first, item.second->last_accessed, item.second->estimated_size});
                     }
                 }
                 lb_log("  %zu candidates (ref_count==0) out of %zu total entries", 
@@ -105,20 +91,23 @@ class IndexCache {
             
             // Phase 2: Sort candidates by last_accessed (oldest first) - no lock needed
             sort(candidates.begin(), candidates.end(), 
-                 [](const auto& a, const auto& b) { return a.second < b.second; });
+                 [](const auto& a, const auto& b) { return std::get<1>(a) < std::get<1>(b); });
             
             // Phase 3: Delete items one at a time, acquiring lock briefly for each
-            // Add small delay between deletions to let other threads work
             int deleted_count = 0;
+            size_t freed_bytes = 0;
             for (const auto &candidate : candidates) {
                 {
                     lock_guard<mutex> lock(mtx);
-                    auto iter = index.find(candidate.first);
+                    auto iter = index.find(std::get<0>(candidate));
                     // Re-check: entry still exists and ref_count still 0?
                     if (iter != index.end() && iter->second->ref_count == 0) {
+                        size_t entry_size = iter->second->estimated_size;
                         delete iter->second->data;
                         delete iter->second;
                         index.erase(iter);
+                        total_estimated_size -= entry_size;
+                        freed_bytes += entry_size;
                         deleted_count++;
                     }
                 }
@@ -126,20 +115,17 @@ class IndexCache {
                 // Small delay to let other threads use the cache
                 this_thread::sleep_for(chrono::milliseconds(1));
                 
-                // Check memory outside the lock - compare cache usage (relative to baseline)
-                long current_use = get_memory_footprint();
-                long current_cache_use = current_use - baseline;
-                if (current_cache_use <= cleaning_target) {
-                    lb_log("Cache trim complete: %ldMB cache (freed %ldMB, deleted %d entries)", 
-                           current_cache_use, start_cache_use - current_cache_use, deleted_count);
+                // Check if we've freed enough
+                if (total_estimated_size.load() <= target_cache_bytes) {
+                    lb_log("Cache trim complete: %zuMB estimated (freed %zuMB, deleted %d entries)", 
+                           total_estimated_size.load() / (1024*1024), freed_bytes / (1024*1024), deleted_count);
                     return;
                 }
             }
             
-            long end_use = get_memory_footprint();
-            long end_cache_use = end_use - baseline;
-            lb_log("Cache trim finished: %ldMB cache (freed %ldMB, deleted %d entries, target was %dMB)", 
-                   end_cache_use, start_cache_use - end_cache_use, deleted_count, cleaning_target);
+            lb_log("Cache trim finished: %zuMB estimated (freed %zuMB, deleted %d entries, target was %zuMB)", 
+                   total_estimated_size.load() / (1024*1024), freed_bytes / (1024*1024), 
+                   deleted_count, target_cache_bytes / (1024*1024));
         }
         
         // Cache takes ownership of data. Returns the cached pointer (which may differ from input
@@ -147,10 +133,6 @@ class IndexCache {
         // Caller MUST call release() when done.
         ReleaseRecordingIndex *
         add(unsigned int artist_credit_id, ReleaseRecordingIndex *data) {
-            
-            if (baseline == 0)
-                save_baseline();
-                
             lock_guard<mutex> lock(mtx);
             
             auto iter = index.find(artist_credit_id);
@@ -161,10 +143,12 @@ class IndexCache {
                 iter->second->last_accessed = chrono::system_clock::to_time_t(chrono::system_clock::now());
                 return iter->second->data;
             } else {
-                CacheEntry *entry = new CacheEntry(data);
+                size_t entry_size = data->estimated_memory_size;
+                CacheEntry *entry = new CacheEntry(data, entry_size);
                 entry->ref_count = 1;  // Caller is using it
                 entry->last_accessed = chrono::system_clock::to_time_t(chrono::system_clock::now());
                 index[artist_credit_id] = entry;
+                total_estimated_size += entry_size;
                 return data;
             }
         }
@@ -196,16 +180,18 @@ class IndexCache {
         }
         
         void cache_cleaner() {
-            lb_log("Cache cleaner started");
+            lb_log("Cache cleaner started: max %zuMB", max_cache_bytes / (1024*1024));
 
             while(!stop) {
                 for(int i = 0; i < SLEEP_DELAY && !stop; i++)
                     this_thread::sleep_for(chrono::seconds(1));
                 
-                long current = get_memory_footprint();
-                long cache_use = current - baseline;
-                if (cache_use >= max_memory_usage) 
+                size_t current = total_estimated_size.load();
+                if (current >= max_cache_bytes) {
+                    lb_log("Cache cleaner triggered: %zuMB >= %zuMB max", 
+                           current / (1024*1024), max_cache_bytes / (1024*1024));
                     trim();
+                }
             }
         }
         

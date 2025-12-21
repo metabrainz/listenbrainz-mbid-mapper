@@ -28,13 +28,16 @@ class ReleaseRecordingIndex {
     public:
         FuzzyIndex                                       *recording_index, *release_index;
         map<unsigned int, vector<ReleaseRecordingLink>>   links;
+        size_t                                            estimated_memory_size;  // estimated memory usage in bytes
 
         ReleaseRecordingIndex(FuzzyIndex *rec_index,
                               FuzzyIndex *rel_index, 
-                              map<unsigned int, vector<ReleaseRecordingLink>> &_links) {
+                              map<unsigned int, vector<ReleaseRecordingLink>> &_links,
+                              size_t memory_size = 0) {
             recording_index = rec_index;
             release_index = rel_index;
             links = _links;
+            estimated_memory_size = memory_size;
         };
 
         ~ReleaseRecordingIndex();

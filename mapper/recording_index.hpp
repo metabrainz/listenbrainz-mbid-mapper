@@ -23,6 +23,11 @@ ReleaseRecordingIndex::~ReleaseRecordingIndex() {
     delete release_index;
 }
 
+// Ratio to estimate in-memory size from on-disk (blob) size.
+// In-memory structures (vectors, maps, nmslib indexes) are larger than 
+// the serialized binary representation. This is an empirical estimate.
+const float MEMORY_SIZE_RATIO = 3.0;
+
 const char *fetch_query = R"(
       SELECT artist_credit_id   
            , release_id  
@@ -277,7 +282,10 @@ class RecordingIndex {
                         cereal::BinaryInputArchive iarchive(ss);
                         iarchive(*recording_index, *release_index, links);
                     }
-                    return new ReleaseRecordingIndex(recording_index, release_index, links);
+                    
+                    // Estimate in-memory size from blob size
+                    size_t estimated_memory = (size_t)(blob_size * MEMORY_SIZE_RATIO);
+                    return new ReleaseRecordingIndex(recording_index, release_index, links, estimated_memory);
                 } else {
                     lb_error("Cannot load index for %d", artist_credit_id);
                     delete recording_index;
