@@ -91,6 +91,7 @@ static Transition transitions[] = {
     { state_stupid_artist_search,       event_no_matches,              state_fail },
     { state_stupid_artist_search,       event_has_matches,             state_select_artist_match },
 
+    // TODO: If there are some artist matches, artist name will never be cleaned right now.
     { state_artist_search,              event_no_matches,              state_fail },
     { state_artist_search,              event_no_matches_not_cleaned,  state_clean_artist_name },
     { state_artist_search,              event_has_matches,             state_select_artist_match },

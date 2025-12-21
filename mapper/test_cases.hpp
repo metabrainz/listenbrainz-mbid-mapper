@@ -82,8 +82,8 @@ inline std::vector<TestCase> get_test_cases() {
         { "鬱P","HAPPYPILLS","ガ","3fdaac99-0261-49a7-92b3-5a909cba187d,130d679a-9a92-4373-8348-0800b6b93a30","df379666-f1de-4789-a8e8-c429a89dd1d2","6fd3bc0e-170f-45e6-a3c8-91943fd61c9c" },
         { "Eve","pray - Single","pray","66bdd1c9-d1c5-40b7-a487-5061fffbd87d","9117d976-7283-4517-b5ac-513e62009613","f8c50031-b2e0-4b60-b8f6-38215271092c" },
         { "TAEYEON", "I", "쌍둥이자리 (Gemini)", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
-        { "TAEYEON", "I", "Gemini", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"}
-        { "peakk divide", "", "worn-out tapes", "", "", "" },
+        { "TAEYEON", "I", "Gemini", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
+        { "peakk divide", "", "worn-out tapes", "", "", "" }
     };
 // Possible recording/release match issue. requires more research
 //    { "Celtic Woman","20th Anniversary","When You Believe","4d483147-c871-48c4-8470-85e5a66381c5","9659808f-3382-42be-8c5d-477d271f9791","376e5743-7bf5-49ee-9c7e-f00aa479882c" },
