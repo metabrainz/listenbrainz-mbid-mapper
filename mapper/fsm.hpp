@@ -91,7 +91,8 @@ static Transition transitions[] = {
     { state_stupid_artist_search,       event_no_matches,              state_fail },
     { state_stupid_artist_search,       event_has_matches,             state_select_artist_match },
 
-    { state_artist_search,              event_no_matches,              state_clean_artist_name },
+    { state_artist_search,              event_no_matches,              state_fail },
+    { state_artist_search,              event_no_matches_not_cleaned,  state_clean_artist_name },
     { state_artist_search,              event_has_matches,             state_select_artist_match },
     
     { state_clean_artist_name,          event_cleaned,                 state_artist_name_check },
@@ -229,7 +230,7 @@ class MappingSearch {
 
         void reset_state_variables() {
             current_state = state_start;
-            artist_name_cleaned = false;
+            has_cleaned_artist = false;
             current_artist_credit_name.clear();
 
             selected_artist_credit_id = 0;

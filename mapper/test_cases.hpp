@@ -16,10 +16,22 @@ struct TestCase {
 
 // new cases:
 // START 'Betty George' '' 'Summer of '82'
+// FSM error
+// peakk divide, worn-out tapes 
+#if 0
+2025-12-20 19:02:54: START 'peakk divide' '' 'worn-out tapes'
+2025-12-20 19:02:54: current state_start                    event event_start               new state_artist_name_check       
+2025-12-20 19:02:54: current state_artist_name_check        event event_normal_name         new state_artist_search           
+2025-12-20 19:02:54: ARTIST SEARCH: 'peakk divide' (peakkdivide)
+2025-12-20 19:02:54: Artist search took 3 ms
+2025-12-20 19:02:54: ERROR: No valid transition found from state_artist_search with event_no_matches_not_cleaned
+2025-12-20 19:02:54: Final state state_artist_search
+#endif
 
 inline std::vector<TestCase> get_test_cases() {
     return {
         { "portishead", "portishead", "western eyes", "8f6bd1e4-fbe1-4f50-aa9b-94c450ec0f11", "10ac58ca-0655-4b16-a6cb-58fdc309de0a", "34745941-69c5-401a-bdb9-ae761a9b3562" },
+        { "portishead (live)", "portishead", "western eyes", "8f6bd1e4-fbe1-4f50-aa9b-94c450ec0f11", "10ac58ca-0655-4b16-a6cb-58fdc309de0a", "34745941-69c5-401a-bdb9-ae761a9b3562" },
         { "portished", "portishad", "western ey", "8f6bd1e4-fbe1-4f50-aa9b-94c450ec0f11", "10ac58ca-0655-4b16-a6cb-58fdc309de0a", "34745941-69c5-401a-bdb9-ae761a9b3562" },
         { "morcheeba","parts of the process","trigger hippie","067102ea-9519-4622-9077-57ca4164cfbb","1e5908d9-ffcd-3080-9920-ece4612a43c9","97e69767-5d34-4c97-b36a-f3b2b1ef9dae" },
         { "Billie Eilish","","COPYCAT","f4abc0b5-3f7a-4eff-8f78-ac078dbce533","37811723-1da9-404d-bd2c-a6a6352bdcc2", "ed3a357a-cd5c-4489-aeb3-25cc87bac005" },
@@ -71,6 +83,7 @@ inline std::vector<TestCase> get_test_cases() {
         { "Eve","pray - Single","pray","66bdd1c9-d1c5-40b7-a487-5061fffbd87d","9117d976-7283-4517-b5ac-513e62009613","f8c50031-b2e0-4b60-b8f6-38215271092c" },
         { "TAEYEON", "I", "쌍둥이자리 (Gemini)", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
         { "TAEYEON", "I", "Gemini", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"}
+        { "peakk divide", "", "worn-out tapes", "", "", "" },
     };
 // Possible recording/release match issue. requires more research
 //    { "Celtic Woman","20th Anniversary","When You Believe","4d483147-c871-48c4-8470-85e5a66381c5","9659808f-3382-42be-8c5d-477d271f9791","376e5743-7bf5-49ee-9c7e-f00aa479882c" },

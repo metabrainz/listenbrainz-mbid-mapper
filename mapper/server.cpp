@@ -156,8 +156,10 @@ int main(int argc, char* argv[]) {
             );
             
             auto end = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            ctx["search_time_ms"] = std::to_string(duration.count());
+            auto duration = std::chrono::duration<double, std::milli>(end - start);
+            char time_buf[32];
+            snprintf(time_buf, sizeof(time_buf), "%.1f", duration.count());
+            ctx["search_time_ms"] = time_buf;
             
             if (result) {
                 ctx["has_match"] = true;
@@ -174,6 +176,7 @@ int main(int argc, char* argv[]) {
                     mbid_list.push_back(mbid_ctx);
                 }
                 ctx["artist_mbids"] = std::move(mbid_list);
+                ctx["artist_credit_id"] = std::move(result->artist_credit_id);
                 
                 ctx["result_release_name"] = result->release_name;
                 ctx["result_release_mbid"] = result->release_mbid;
