@@ -159,7 +159,7 @@ class SearchFunctions {
 
         ReleaseRecordingIndex *
         load_recording_release_index(unsigned int artist_credit_id) {
-#if 0  // Cache disabled for memory debugging
+#if 1  // Cache re-enabled
             auto release_recording_index = index_cache->get(artist_credit_id);
             if (!release_recording_index) {
                 RecordingIndex rec_index(index_dir);
@@ -167,7 +167,8 @@ class SearchFunctions {
                 if (release_recording_index == nullptr)
                     return nullptr;
                 // Use returned pointer - another thread may have added it first
-                index_cache->add(artist_credit_id, release_recording_index);
+                // add() returns the cached pointer (may differ from input) with refcount incremented
+                release_recording_index = index_cache->add(artist_credit_id, release_recording_index);
             }
 
             return release_recording_index;

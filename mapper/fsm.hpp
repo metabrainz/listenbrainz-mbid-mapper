@@ -256,7 +256,7 @@ class MappingSearch {
             delete recording_matches;
             recording_matches = nullptr;
 
-#if 0  // Cache disabled for memory debugging
+#if 1  // Cache re-enabled
             // Release cache reference if we have one
             if (release_recording_index != nullptr) {
                 index_cache->release(cached_artist_credit_id);
@@ -379,7 +379,7 @@ class MappingSearch {
                 delete release_matches;
                 release_matches = nullptr;
 
-#if 0  // Cache disabled for memory debugging
+#if 1  // Cache re-enabled
                 // Release cache reference for old artist's index
                 if (release_recording_index != nullptr) {
                     index_cache->release(cached_artist_credit_id);
