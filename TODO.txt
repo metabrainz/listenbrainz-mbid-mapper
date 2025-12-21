@@ -1,5 +1,6 @@
 1. improve thresholding
 3. empty rows in source mapping
+3. Is there thread level segfault isolation?
 
 
 Problematic test case:

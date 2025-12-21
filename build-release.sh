@@ -27,6 +27,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_SANDBOX=OFF \
       -DWITH_WERROR=OFF \
       -DSKIP_PERFORMANCE_COMPARISON=ON \
+      -DJUST_INSTALL_CEREAL=ON \
       ../mapper
 
 # Build pcre2 first to generate pcre2.h header (needed by jpcre2)

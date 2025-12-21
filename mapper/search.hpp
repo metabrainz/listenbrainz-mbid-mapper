@@ -79,7 +79,7 @@ class SearchFunctions {
         fetch_metadata(SearchMatch *result) {
             string query;
             
-            lb_log("fetch metadata %d %d %d", result->artist_credit_id, result->release_id, result->recording_id);
+            lb_debug("fetch metadata %d %d %d", result->artist_credit_id, result->release_id, result->recording_id);
             
             if (result->release_id)
                 query = string(fetch_metadata_query);
@@ -185,7 +185,7 @@ class SearchFunctions {
             }
 
             vector<IndexResult> *rel_results = release_recording_index->release_index->search(release_name_encoded, .7, 'l');
-            if (rel_results->size()) {
+            if (rel_results != nullptr && rel_results->size()) {
                 // Sort results by confidence in descending order
                 sort(rel_results->begin(), rel_results->end(), [](const IndexResult& a, const IndexResult& b) {
                     return a.confidence > b.confidence;
@@ -214,7 +214,7 @@ class SearchFunctions {
             }
 
             vector<IndexResult> *rec_results = release_recording_index->recording_index->search(recording_name_encoded, .7, 'c');
-            if (rec_results->size()) {
+            if (rec_results != nullptr && rec_results->size()) {
                 // Sort results by confidence in descending order
                 sort(rec_results->begin(), rec_results->end(), [](const IndexResult& a, const IndexResult& b) {
                     return a.confidence > b.confidence;
@@ -222,10 +222,10 @@ class SearchFunctions {
                 
                 for(auto &result : *rec_results) {
                     string text = release_recording_index->recording_index->get_index_text(result.result_index);
-                    lb_log("      %.2f %-8u %s", result.confidence, result.id, text.c_str());
+                    lb_debug("      %.2f %-8u %s", result.confidence, result.id, text.c_str());
                 }
             } else {
-                lb_log("      No recording results.");
+                lb_debug("      No recording results.");
             }
 
             return rec_results;
@@ -268,7 +268,7 @@ class SearchFunctions {
                     break; // Found the recording, no need to continue searching
                 }
             }  
-            lb_log("found no link between recording and release");
+            lb_debug("found no link between recording and release");
             return nullptr;
         }
 };

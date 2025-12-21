@@ -69,6 +69,8 @@ class IndexCache {
         
         void
         trim() {
+            long start_use = get_memory_footprint();
+            printf("Cache trim starting: %ldMB in use\n", start_use);
             mtx.lock();
             for(; index.size();) {
                 vector<std::pair<unsigned int, time_t>> access_times(last_accessed.begin(), last_accessed.end());
@@ -85,8 +87,10 @@ class IndexCache {
                 mtx.unlock();
                 
                 long current_use = get_memory_footprint();
-                if (current_use <= cleaning_target)
+                if (current_use <= cleaning_target) {
+                    printf("Cache trim complete: %ldMB in use (freed %ldMB)\n", current_use, start_use - current_use);
                     return;
+                }
                 mtx.lock();
             }
             mtx.unlock();

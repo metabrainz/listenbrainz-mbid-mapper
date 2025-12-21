@@ -326,7 +326,7 @@ int main(int argc, char* argv[]) {
     // - loglevel: Reduce logging overhead in production (Warning level)
     // - signal_clear: Don't install default signal handlers (useful for containers)
     app.timeout(static_cast<std::uint8_t>(g_timeout))
-       .loglevel(crow::LogLevel::Info)
+       .loglevel(crow::LogLevel::Warning)
        .signal_clear();
     
     if (g_num_threads > 0) {

@@ -287,17 +287,17 @@ class MappingSearch {
             delete multiple_artist_matches;
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            lb_log("Artist search took %ld ms", duration.count()); 
+            lb_debug("Artist search took %ld ms", duration.count()); 
             
             if (artist_matches->size()) {
                 sort(artist_matches->begin(), artist_matches->end(), [](const IndexResult& a, const IndexResult& b) {
                     return a.confidence > b.confidence;
                 });
 
-                lb_log("    ARTIST RESULTS:");
+                lb_debug("    ARTIST RESULTS:");
                 for(const auto &result : *artist_matches) {
                     string name = search_functions->get_artist_credit_name(result.id);
-                    lb_log("      %.2f %-8u %c %s", result.confidence, result.id, result.source, name.c_str());
+                    lb_debug("      %.2f %-8u %c %s", result.confidence, result.id, result.source, name.c_str());
                 }
 
                 return enter_transition(event_has_matches);
@@ -335,7 +335,7 @@ class MappingSearch {
             artist_matches = artist_index->stupid_artist_index->search(current_artist_credit_name, .7, 's');
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            lb_log("Stupid artist search took %ld ms", duration.count());
+            lb_debug("Stupid artist search took %ld ms", duration.count());
             if (artist_matches->size()) {
                 return enter_transition(event_has_matches);
             } else {
@@ -356,7 +356,7 @@ class MappingSearch {
 
             if (artist_match_index < artist_matches->size() && (*artist_matches)[artist_match_index].confidence >= artist_threshold) {
                 selected_artist_credit_id = (*artist_matches)[artist_match_index].id;
-                lb_log("artist credit id selected: %u", selected_artist_credit_id);
+                lb_debug("artist credit id selected: %u", selected_artist_credit_id);
 
                 // Invalidate the current recording matches
                 recording_match_index  = -1;
@@ -380,7 +380,7 @@ class MappingSearch {
             if (release_recording_index == nullptr) {
                 release_recording_index = search_functions->load_recording_release_index(selected_artist_credit_id);
                 if (release_recording_index == nullptr) {
-                    lb_log("Failed to load recording index for artist credit %u", selected_artist_credit_id);
+                    lb_debug("Failed to load recording index for artist credit %u", selected_artist_credit_id);
                     return enter_transition(event_no_matches);
                 }
             }
@@ -390,7 +390,7 @@ class MappingSearch {
             recording_matches = search_functions->recording_search(release_recording_index, recording_name); 
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            lb_log("Recording search took %ld ms", duration.count());
+            lb_debug("Recording search took %ld ms", duration.count());
             if (recording_matches && recording_matches->size() > 0)
                 return enter_transition(event_has_matches);
            
@@ -406,7 +406,7 @@ class MappingSearch {
 
             if (recording_match_index < recording_matches->size() && (*recording_matches)[recording_match_index].confidence >= recording_threshold) {
                 selected_recording_id = (*recording_matches)[recording_match_index].id;
-                lb_log("recording id selected: %u", selected_recording_id);
+                lb_debug("recording id selected: %u", selected_recording_id);
                 return enter_transition(event_meets_threshold);
             }
 
@@ -428,7 +428,7 @@ class MappingSearch {
             if (release_recording_index == nullptr) {
                 release_recording_index = search_functions->load_recording_release_index(selected_artist_credit_id);
                 if (release_recording_index == nullptr) {
-                    lb_log("Failed to load recording index for artist credit %u", selected_artist_credit_id);
+                    lb_debug("Failed to load recording index for artist credit %u", selected_artist_credit_id);
                     return enter_transition(event_no_matches);
                 }
             }
@@ -438,10 +438,10 @@ class MappingSearch {
             release_matches = search_functions->release_search(release_recording_index, release_name); 
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            lb_log("Release search took %ld ms", duration.count());
+            lb_debug("Release search took %ld ms", duration.count());
             if (release_matches && release_matches->size() > 0) {
                 selected_release_id = (*release_matches)[0].id;
-                lb_log("release id selected: %u", selected_release_id);
+                lb_debug("release id selected: %u", selected_release_id);
                 release_match_index = 0;
                 return enter_transition(event_has_matches);
             }
@@ -461,7 +461,7 @@ class MappingSearch {
                 return enter_transition(event_no_matches);
 
             release_match_index = 0;
-            lb_log("canonical release id: %u", (*release_matches)[release_match_index].id);
+            lb_debug("canonical release id: %u", (*release_matches)[release_match_index].id);
 
             return enter_transition(event_has_matches);
         }
@@ -499,18 +499,18 @@ class MappingSearch {
 
             current_state = state_start;
             reset_state_variables();
-            lb_log("START '%s' '%s' '%s'", artist_credit_name.c_str(), release_name.c_str(), recording_name.c_str());
+            lb_debug("START '%s' '%s' '%s'", artist_credit_name.c_str(), release_name.c_str(), recording_name.c_str());
             if (!enter_transition(event_start))  {
                 auto end = std::chrono::high_resolution_clock::now();
                 auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-                lb_log("Search took %ld ms", duration.count());
+                lb_debug("Search took %ld ms", duration.count());
                 return nullptr;
             }
             
-            lb_log("Final state %s", get_state_name(current_state));
+            lb_debug("Final state %s", get_state_name(current_state));
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            lb_log("Search took %ld ms", duration.count());
+            lb_debug("Search took %ld ms", duration.count());
             SearchMatch *temp = search_match;
             search_match = nullptr;
             return temp;

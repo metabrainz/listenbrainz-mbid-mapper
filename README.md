@@ -36,6 +36,8 @@ If you're going to use a local development environment use .env-local-dev as a s
 cp .env-local-dev .env
 ```
 
+You'll also need to install libboost-dev and libreadline-dev for local development.
+
 For deployment or running it in docker:
 
 ```bash
