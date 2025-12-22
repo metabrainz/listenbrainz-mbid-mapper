@@ -9,6 +9,7 @@
 #include <memory>
 #include "crow.h"
 #include "fsm.hpp"
+#include "statistics.hpp"
 #include "test_cases.hpp"
 
 using namespace std;
@@ -27,11 +28,14 @@ void signal_handler(int signum) {
 // Shared resources (created once, shared across all threads)
 static string g_index_dir = "/data";
 static string g_templates_dir = "/mapper/templates";
-static int g_cache_size = 100;  // in MB
+static int g_max_process_size = 100;  // max RSS in MB
+static int g_cache_cleaner_delay = 60;  // seconds between cache cleaner checks
 static int g_num_threads = 0;  // 0 = use all available cores
 static int g_timeout = 30;  // connection timeout in seconds (default Crow is 5, too short for complex queries)
+static const int REPORT_STATS_REQUEST_COUNT = 10;  // batch size for reporting stats to global
 static ArtistIndex* g_artist_index = nullptr;
 static IndexCache* g_index_cache = nullptr;
+static Statistics* g_statistics = nullptr;
 static std::atomic<bool> g_ready{false};
 
 MappingSearch* get_mapping_search() {
@@ -41,6 +45,31 @@ MappingSearch* get_mapping_search() {
         mapping_search = std::make_unique<MappingSearch>(g_index_dir, g_artist_index, g_index_cache);
     }
     return mapping_search.get();
+}
+
+// Per-thread statistics to reduce mutex contention
+struct ThreadStats {
+    int count_200 = 0;
+    int count_400 = 0;
+    int count_404 = 0;
+    int total = 0;
+};
+
+void update_stats(int status) {
+    thread_local ThreadStats stats;
+    
+    if (status == 200) stats.count_200++;
+    else if (status == 400) stats.count_400++;
+    else if (status == 404) stats.count_404++;
+    
+    stats.total++;
+    if (stats.total >= REPORT_STATS_REQUEST_COUNT) {
+        g_statistics->update(stats.count_200, stats.count_400, stats.count_404);
+        stats.count_200 = 0;
+        stats.count_400 = 0;
+        stats.count_404 = 0;
+        stats.total = 0;
+    }
 }
 
 void print_usage() {
@@ -54,7 +83,8 @@ void print_usage() {
     lb_log("  PORT             Port number to listen on (default: 5000)");
     lb_log("  TEMPLATE_DIR     Templates directory (default: /mapper/templates)");
     lb_log("  NUM_THREADS      Number of worker threads (0 = auto, default: 0)");
-    lb_log("  MAX_CACHE_SIZE   Max index cache size in MB (default: 100)");
+    lb_log("  MAX_PROCESS_SIZE Max process RSS size in MB (default: 100)");
+    lb_log("  CACHE_CLEANER_DELAY  Seconds between cache cleaner checks (default: 60)");
     lb_log("  TIMEOUT          Connection timeout in seconds (default: 30)");
 }
 
@@ -110,12 +140,18 @@ int main(int argc, char* argv[]) {
         if (g_num_threads < 0) g_num_threads = 0;
     }
     
-    const char* env_cache_size = std::getenv("MAX_CACHE_SIZE");
-    if (env_cache_size && strlen(env_cache_size) > 0) {
-        g_cache_size = atoi(env_cache_size);
-        if (g_cache_size < 1) g_cache_size = 100;
+    const char* env_max_process_size = std::getenv("MAX_PROCESS_SIZE");
+    if (env_max_process_size && strlen(env_max_process_size) > 0) {
+        g_max_process_size = atoi(env_max_process_size);
+        if (g_max_process_size < 1) g_max_process_size = 100;
     }
-    lb_log("Max index cache size: %d MB", g_cache_size);
+    lb_log("Max process size: %d MB", g_max_process_size);
+    
+    const char* env_cache_cleaner_delay = std::getenv("CACHE_CLEANER_DELAY");
+    if (env_cache_cleaner_delay && strlen(env_cache_cleaner_delay) > 0) {
+        g_cache_cleaner_delay = atoi(env_cache_cleaner_delay);
+        if (g_cache_cleaner_delay < 1) g_cache_cleaner_delay = 60;
+    }
     
     const char* env_timeout = std::getenv("TIMEOUT");
     if (env_timeout && strlen(env_timeout) > 0) {
@@ -123,6 +159,8 @@ int main(int argc, char* argv[]) {
         if (g_timeout < 1) g_timeout = 30;
         if (g_timeout > 255) g_timeout = 255;  // Crow uses uint8_t
     }
+    
+    g_statistics = new Statistics();
 
     // Load shared indexes BEFORE starting the server
     lb_log("Loading shared indexes...");
@@ -138,11 +176,10 @@ int main(int argc, char* argv[]) {
     std::signal(SIGTERM, signal_handler);
 
     // Create index cache
-    g_index_cache = new IndexCache(g_cache_size);
-    //g_index_cache->start();
+    g_index_cache = new IndexCache(g_max_process_size, g_cache_cleaner_delay);
+    g_index_cache->start();
 
     g_ready = true;
-    lb_log("Indexes loaded. Server ready.");
 
     CROW_ROUTE(app, "/")
     ([](const crow::request& req) {
@@ -224,6 +261,7 @@ int main(int argc, char* argv[]) {
             }
         }
         
+        update_stats(200);
         return crow::response(200, page.render(ctx));
     });
 
@@ -231,9 +269,11 @@ int main(int argc, char* argv[]) {
     ([]() {
         if (!g_ready) {
             auto page = crow::mustache::load("loading.html");
+            update_stats(200);
             return crow::response(200, page.render());
         }
         auto page = crow::mustache::load("docs.html");
+        update_stats(200);
         return crow::response(200, page.render());
     });
 
@@ -281,6 +321,7 @@ int main(int argc, char* argv[]) {
         }
         ctx["test_cases"] = std::move(cases_list);
         
+        update_stats(200);
         return crow::response(200, page.render(ctx));
     });
 
@@ -300,6 +341,7 @@ int main(int argc, char* argv[]) {
         if (!artist_credit_name || !recording_name) {
             crow::json::wvalue error;
             error["error"] = "Missing required parameters: artist_credit_name and recording_name are required";
+            update_stats(400);
             return crow::response(400, error);
         }
 
@@ -332,11 +374,20 @@ int main(int argc, char* argv[]) {
             response["confidence"] = result->confidence;
             
             delete result;
+            update_stats(200);
             return crow::response(200, response);
         } else {
             response["error"] = "No match found";
+            update_stats(404);
             return crow::response(404, response);
         }
+    });
+
+    CROW_ROUTE(app, "/metrics")
+    ([]() {
+        crow::response res(200, g_statistics->get_metrics());
+        res.set_header("Content-Type", "text/plain; charset=utf-8");
+        return res;
     });
 
     lb_log("Starting server on %s:%d", host.c_str(), port);

@@ -123,11 +123,8 @@ class FuzzyIndex {
             vector<string> text_data;
             similarity::ObjectVector data;
             
-            if (index == nullptr) {
-                printf("No index available.\n");
-                fflush(stdout);
+            if (index == nullptr)
                 return nullptr;
-            }
             
             vector<IndexResult> *results = new vector<IndexResult>;
 

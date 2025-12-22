@@ -159,7 +159,6 @@ class SearchFunctions {
 
         ReleaseRecordingIndex *
         load_recording_release_index(unsigned int artist_credit_id) {
-#if 1  // Cache re-enabled
             auto release_recording_index = index_cache->get(artist_credit_id);
             if (!release_recording_index) {
                 RecordingIndex rec_index(index_dir);
@@ -172,11 +171,6 @@ class SearchFunctions {
             }
 
             return release_recording_index;
-#else
-            // Direct load without cache - caller owns the returned pointer
-            RecordingIndex rec_index(index_dir);
-            return rec_index.load(artist_credit_id, get_db());
-#endif
         }
 
         vector<IndexResult> *

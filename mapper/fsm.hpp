@@ -256,18 +256,12 @@ class MappingSearch {
             delete recording_matches;
             recording_matches = nullptr;
 
-#if 1  // Cache re-enabled
             // Release cache reference if we have one
             if (release_recording_index != nullptr) {
                 index_cache->release(cached_artist_credit_id);
                 release_recording_index = nullptr;
                 cached_artist_credit_id = 0;
             }
-#else
-            // Direct delete - we own the pointer (cache disabled)
-            delete release_recording_index;
-            release_recording_index = nullptr;
-#endif
 
             delete search_match;
             search_match = nullptr;

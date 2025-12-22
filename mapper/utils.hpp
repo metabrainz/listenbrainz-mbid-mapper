@@ -149,3 +149,19 @@ inline void load_env_file(const char* filename = ".env") {
     
     file.close();
 }
+
+// Returns current process RSS in MB
+size_t get_current_rss_mb() {
+    std::ifstream statm("/proc/self/statm");
+    if (!statm)
+         return 0;
+
+    size_t size, resident;
+    statm >> size >> resident;
+
+    // Values in statm are reported in pages. 
+    // sysconf(_SC_PAGESIZE) typically returns 4096 (4KB).
+    long page_size = sysconf(_SC_PAGESIZE); 
+    return (resident * page_size) / (1024 * 1024);
+}
+        
