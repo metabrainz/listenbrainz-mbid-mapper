@@ -1,12 +1,6 @@
 .env
 build
 mapper/build
-#mapper/deps/nmslib
-#mapper/deps/unidecode
-#mapper/deps/SQLiteCpp
-#mapper/deps/Crow
-#mapper/deps/pcre2
-#mapper/deps/jpcre2
-#mapper/deps/armadillo-code
-#mapper/deps/cereal
+listen_test_data
+index
 .vscode
