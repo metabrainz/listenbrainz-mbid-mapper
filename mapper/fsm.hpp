@@ -373,18 +373,12 @@ class MappingSearch {
                 delete release_matches;
                 release_matches = nullptr;
 
-#if 1  // Cache re-enabled
                 // Release cache reference for old artist's index
                 if (release_recording_index != nullptr) {
                     index_cache->release(cached_artist_credit_id);
                     release_recording_index = nullptr;
                     cached_artist_credit_id = 0;
                 }
-#else
-                // Direct delete - we own the pointer (cache disabled)
-                delete release_recording_index;
-                release_recording_index = nullptr;
-#endif
 
                 return enter_transition(event_meets_threshold);
             }
