@@ -11,6 +11,11 @@
 const int NUM_ROWS_PER_COMMIT = 25000;
 const auto MAX_ENCODED_STRING_LENGTH = 30;
 
+// artist_credit_id 1 = "Various Artists" - has millions of releases, skip for indexing
+// artist_credit_id 2 = another special case to skip
+// Queries should use: WHERE artist_credit_id > VARIOUS_ARTISTS_ARTIST_CREDIT_ID
+const int VARIOUS_ARTISTS_ARTIST_CREDIT_ID = 2;
+
 struct ReleaseRecordingLink {
     
     unsigned int release_index, release_id, rank;

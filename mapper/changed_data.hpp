@@ -5,6 +5,7 @@
 #include <libpq-fe.h>
 #include "SQLiteCpp.h"
 #include "utils.hpp"
+#include "defs.hpp"
 
 using namespace std;
 
@@ -192,13 +193,20 @@ public:
     }
     
     /**
-     * Get the current timestamp from PostgreSQL.
-     * This should be called BEFORE querying for changes to avoid race conditions.
+     * Get the current replication timestamp from PostgreSQL.
+     * This uses the replication_control table to get the actual data timestamp,
+     * not the wall clock time. This ensures we track what data we've processed.
      */
     bool fetch_current_timestamp() {
-        PGresult* res = PQexec(pg_conn, "SELECT NOW()::TEXT");
+        PGresult* res = PQexec(pg_conn, 
+            "SELECT last_replication_date::TEXT FROM musicbrainz.replication_control");
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            lb_error("Failed to get current timestamp: %s", PQerrorMessage(pg_conn));
+            lb_error("Failed to get replication timestamp: %s", PQerrorMessage(pg_conn));
+            PQclear(res);
+            return false;
+        }
+        if (PQntuples(res) == 0) {
+            lb_error("No rows in replication_control table");
             PQclear(res);
             return false;
         }
@@ -289,6 +297,17 @@ public:
         if (!execute_and_collect(CHANGED_RECORDINGS_DIRECT,
                                   "recordings", changed_recording_ids)) return false;
         
+        // Filter out Various Artists and other special artist_credits
+        // (artist_credit_id 1 = Various Artists has millions of releases)
+        size_t before_filter = changed_artist_credit_ids.size();
+        for (int id = 1; id <= VARIOUS_ARTISTS_ARTIST_CREDIT_ID; id++) {
+            changed_artist_credit_ids.erase(id);
+        }
+        if (before_filter != changed_artist_credit_ids.size()) {
+            lb_log("Filtered out %zu special artist_credit_ids (Various Artists etc.)",
+                   before_filter - changed_artist_credit_ids.size());
+        }
+        
         return true;
     }
     
@@ -344,6 +363,7 @@ public:
      */
     void print_summary() const {
         lb_log("Change summary:");
+        lb_log("  Time range: %s to %s", last_updated.c_str(), current_timestamp.c_str());
         lb_log("  Release groups to update: %zu", changed_release_groups.size());
         lb_log("  Artist credits to update: %zu", changed_artist_credit_ids.size());
         lb_log("  Recordings changed: %zu", changed_recording_ids.size());
@@ -363,10 +383,16 @@ inline bool initialize_update_timestamp(PGconn* pg_conn, SQLite::Database& sqlit
         )
     )");
     
-    // Get current timestamp from PostgreSQL
-    PGresult* res = PQexec(pg_conn, "SELECT NOW()::TEXT");
+    // Get replication timestamp from PostgreSQL (not wall clock time)
+    PGresult* res = PQexec(pg_conn, 
+        "SELECT last_replication_date::TEXT FROM musicbrainz.replication_control");
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        lb_error("Failed to get current timestamp: %s", PQerrorMessage(pg_conn));
+        lb_error("Failed to get replication timestamp: %s", PQerrorMessage(pg_conn));
+        PQclear(res);
+        return false;
+    }
+    if (PQntuples(res) == 0) {
+        lb_error("No rows in replication_control table");
         PQclear(res);
         return false;
     }

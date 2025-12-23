@@ -11,6 +11,7 @@
 #include "mapping_update_fetcher.hpp"
 #include "recording_index.hpp"
 #include "mapping_batch_updater.hpp"
+#include "artist_index.hpp"
 
 using namespace std;
 
@@ -186,8 +187,18 @@ int main(int argc, char* argv[]) {
             lb_log("No artist_credit_ids to update in mapping table");
         }
         
-        // Step 4: Save the new timestamp
-        lb_log("=== Step 4: Saving timestamp ===");
+        // Step 4: Rebuild artist indexes
+        // Since artist data changes with most updates and nmslib doesn't support
+        // incremental updates, we rebuild all three artist indexes (entity_id < 0)
+        // This takes ~3 minutes and ensures artist search stays current
+        lb_log("=== Step 4: Rebuilding artist indexes ===");
+        {
+            ArtistIndex artist_index(index_dir);
+            artist_index.build();
+        }
+        
+        // Step 5: Save the new timestamp
+        lb_log("=== Step 5: Saving timestamp ===");
         if (!changed_data.save_current_timestamp()) {
             lb_error("Failed to save timestamp");
             PQfinish(pg_conn);

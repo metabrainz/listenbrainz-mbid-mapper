@@ -185,10 +185,11 @@ class IndexCache {
                 
                 size_t current_rss = get_current_rss_mb();
                 if (current_rss >= max_memory_mb) {
-                    lb_log("Cache cleaner triggered: RSS %zuMB >= %zuMB max", 
-                           current_rss, max_memory_mb);
+                    lb_log("Cache cleaner triggered: RSS %zuMB >= %zuMB max", current_rss, max_memory_mb);
                     trim();
                 }
+                else
+                    lb_log("Cache cleaner not triggered: RSS %zuMB < %zuMB max", current_rss, max_memory_mb);
             }
         }
         

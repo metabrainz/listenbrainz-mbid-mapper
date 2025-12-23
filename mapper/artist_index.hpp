@@ -1,6 +1,7 @@
 #pragma once
 #include <stdio.h>
 #include <ctime>
+#include <chrono>
 #include <set>
 #include <map>
 #include <cassert>
@@ -445,21 +446,21 @@ class ArtistIndex {
         }
         
         void build() {
+            using namespace std::chrono;
+            auto total_start = high_resolution_clock::now();
             
-            lb_log("load and index artist data");
-            // TODO: THis process creates duplicates
+            lb_log("Building artist indexes...");
+            
+            // --- Single artist index ---
+            auto index_start = high_resolution_clock::now();
+            
             load_artist_data(fetch_single_artists_query, single_artist_credit_ids, single_artist_credit_texts);
             load_artist_aliases(single_artist_credit_ids, single_artist_credit_texts);
             
             set<pair<unsigned int, string>> unique_artist_data, stupid_artist_data;
-
             vector<unsigned int> single_ids, multiple_ids, stupid_ids;
             vector<string>       single_texts, multiple_texts, stupid_texts; 
             
-            // TESTING:
-            // - Leave out stupid artists for now.
-
-            // Encode the single artists into sets in order to remove dups
             for(unsigned int i = 0; i < single_artist_credit_ids.size(); i++) {
                 auto ret = encode.encode_string(single_artist_credit_texts[i]);
                 if (ret.size() == 0) {
@@ -474,7 +475,6 @@ class ArtistIndex {
             vector<unsigned int>().swap(single_artist_credit_ids);
             vector<string>().swap(single_artist_credit_texts);
             
-            // Convert sets back to vectors for insertion into fuzzyindex
             for(auto &it : unique_artist_data) {
                 single_ids.push_back(it.first);
                 single_texts.push_back(it.second);
@@ -487,7 +487,6 @@ class ArtistIndex {
             }
             set<pair<unsigned int, string>>().swap(stupid_artist_data);
 
-            // The extra contexts are so that the stringstreams go out of scope ASAP
             {
                 FuzzyIndex *single_artist_index = new FuzzyIndex();
                 single_artist_index->build(single_ids, single_texts);
@@ -500,7 +499,6 @@ class ArtistIndex {
                 vector<unsigned int>().swap(single_ids);
                 vector<string>().swap(single_texts);
 
-                lb_log("artist index size: %lu bytes", ss_single.str().length());
                 try
                 {
                     SQLite::Database    db(db_file, SQLite::OPEN_READWRITE);
@@ -515,42 +513,49 @@ class ArtistIndex {
                     printf("save single artist index db exception: %s\n", e.what());
                 }
             }
+            
+            auto index_end = high_resolution_clock::now();
+            auto index_sec = duration_cast<seconds>(index_end - index_start).count();
+            lb_log("  Single artist index: %ld seconds", index_sec);
       
+            // --- Stupid artist index ---
+            index_start = high_resolution_clock::now();
             {
-                std::stringstream ss_stupid;
                 if (stupid_ids.size()) {
                     FuzzyIndex *stupid_artist_index = new FuzzyIndex();
                     stupid_artist_index->build(stupid_ids, stupid_texts);
+                    std::stringstream ss_stupid;
                     {
                         cereal::BinaryOutputArchive oarchive(ss_stupid);
                         oarchive(*stupid_artist_index);
                     }
-                    lb_log("stupid artist index size: %lu bytes", ss_stupid.str().length());
                     delete stupid_artist_index;
 
-                    if (stupid_ids.size()) {
-                        try
-                        {
-                            SQLite::Database    db(db_file, SQLite::OPEN_READWRITE);
-                            SQLite::Statement   query(db, insert_blob_query);
-                        
-                            SQLite::Statement   query2(db, insert_blob_query);
-                            query2.bind(1, STUPID_ARTIST_INDEX_ENTITY_ID);
-                            query2.bind(2, (const char *)ss_stupid.str().c_str(), (int32_t)ss_stupid.str().length());
-                            query2.exec();
-                        }
-                        catch (std::exception& e)
-                        {
-                            printf("save stupid artist index db exception: %s\n", e.what());
-                        }
+                    try
+                    {
+                        SQLite::Database    db(db_file, SQLite::OPEN_READWRITE);
+                        SQLite::Statement   query(db, insert_blob_query);
+                    
+                        query.bind(1, STUPID_ARTIST_INDEX_ENTITY_ID);
+                        query.bind(2, (const char *)ss_stupid.str().c_str(), (int32_t)ss_stupid.str().length());
+                        query.exec();
                     }
+                    catch (std::exception& e)
+                    {
+                        printf("save stupid artist index db exception: %s\n", e.what());
+                    }
+                    
                     vector<unsigned int>().swap(stupid_ids);
                     vector<string>().swap(stupid_texts);
                 }
             }
+            index_end = high_resolution_clock::now();
+            index_sec = duration_cast<seconds>(index_end - index_start).count();
+            lb_log("  Stupid artist index: %ld seconds", index_sec);
 
-            // load and process multiple artists
-            lb_log("load and index multiple artist data");
+            // --- Multiple artist index ---
+            index_start = high_resolution_clock::now();
+            
             load_artist_data(fetch_multiple_artists_query, multiple_artist_credit_ids, multiple_artist_credit_texts);
 
             for(unsigned int i = 0; i < multiple_artist_credit_ids.size(); i++) {
@@ -575,7 +580,6 @@ class ArtistIndex {
                     cereal::BinaryOutputArchive oarchive(ss_multiple);
                     oarchive(*multiple_artist_index);
                 }
-                lb_log("multiple artist index size: %lu bytes", ss_multiple.str().length());
                 delete multiple_artist_index;
                 vector<unsigned int>().swap(multiple_ids);
                 vector<string>().swap(multiple_texts);
@@ -594,8 +598,14 @@ class ArtistIndex {
                     printf("save multiple artist index db exception: %s\n", e.what());
                 }
             }
+            
+            index_end = high_resolution_clock::now();
+            index_sec = duration_cast<seconds>(index_end - index_start).count();
+            lb_log("  Multiple artist index: %ld seconds", index_sec);
            
-            lb_log("done building artists indexes.");
+            auto total_end = high_resolution_clock::now();
+            auto total_sec = duration_cast<seconds>(total_end - total_start).count();
+            lb_log("Artist indexes complete: %ld seconds", total_sec);
         }
         
         bool

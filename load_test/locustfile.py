@@ -43,6 +43,7 @@ def test_case_generator(filepath: str):
             try:
                 data = json.loads(line)
                 track_metadata = data.get("track_metadata", {})
+                print("%s, %s, %s" % (track_metadata.get("artist_name", ""), track_metadata.get("release_name", ""), track_metadata.get("track_name", "")))
                 yield {
                     "artist_credit_name": track_metadata.get("artist_name", ""),
                     "release_name": track_metadata.get("release_name", ""),

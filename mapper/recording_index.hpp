@@ -9,6 +9,7 @@
 #include "encode.hpp"
 #include "utils.hpp"
 #include "artist_index.hpp"
+#include "defs.hpp"
 #include "cereal/archives/binary.hpp"
 
 using namespace std;
@@ -350,11 +351,22 @@ class RecordingIndex {
                 return results;
             }
             
-            lb_log("Building indexes for %zu artist_credit_ids using %d threads...", 
-                   artist_credit_ids.size(), num_threads);
+            // Filter out Various Artists and other special artist_credits
+            vector<int> ids;
+            ids.reserve(artist_credit_ids.size());
+            for (int id : artist_credit_ids) {
+                if (id > VARIOUS_ARTISTS_ARTIST_CREDIT_ID) {
+                    ids.push_back(id);
+                }
+            }
             
-            // Convert to vector for easier indexing
-            vector<int> ids(artist_credit_ids.begin(), artist_credit_ids.end());
+            if (ids.empty()) {
+                lb_log("No artist_credit_ids to process after filtering");
+                return results;
+            }
+            
+            lb_log("Building indexes for %zu artist_credit_ids using %d threads...", 
+                   ids.size(), num_threads);
             
             // Thread result structure
             struct ThreadResult {

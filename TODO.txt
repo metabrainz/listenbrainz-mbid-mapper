@@ -7,3 +7,9 @@
 Problematic test case:
 
 
+Incremental updates:
+  -- Update artist/whatever indexes
+
+notes:
+
+carton exec -- admin/replication/LoadReplicationChanges --limit 24

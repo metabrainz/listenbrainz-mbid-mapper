@@ -389,6 +389,7 @@ int main(int argc, char* argv[]) {
 
     CROW_ROUTE(app, "/metrics")
     ([]() {
+        g_statistics->update_cache_items(g_index_cache->get_cache_entry_count());
         crow::response res(200, g_statistics->get_metrics());
         res.set_header("Content-Type", "text/plain; charset=utf-8");
         return res;
