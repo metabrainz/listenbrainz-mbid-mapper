@@ -68,8 +68,8 @@ class Explorer {
             delete index_cache;
         }
         
-        void load() {
-            artist_index->load();
+        bool load() {
+            return artist_index->load();
         }
         
         string make_comma_sep_string(const vector<string> &str_array) {
@@ -908,7 +908,10 @@ int main(int argc, char* argv[]) {
         Explorer explorer(index_dir);
         
         printf("Loading artist index from: %s\n", index_dir.c_str());
-        explorer.load();
+        if (!explorer.load()) {
+            printf("Error: Failed to load artist index. INDEX_DIR=%s\n", index_dir.c_str());
+            return -1;
+        }
         printf("Explorer ready.\n\n");
         
         explorer.run_interactive();

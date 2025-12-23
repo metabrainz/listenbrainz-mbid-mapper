@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
    
     // Clear cache if force rebuild is requested
     if (force_rebuild) {
-        lb_error("force rebuild requested - clearing index cache");
+        lb_log("force rebuild requested - clearing index cache");
         try {
             string db_file = index_dir + "/mapping.db";
             SQLite::Database db(db_file, SQLite::OPEN_READWRITE);

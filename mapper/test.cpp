@@ -101,21 +101,27 @@ TEST_CASE("basic lookup tests") {
 
 int main(int argc, char* argv[]) {
     init_logging();
+    load_env_file();  // Load .env file, env vars take precedence
     
-    if (argc < 2) {
-        lb_log("Usage: mapping_tests <index_dir>");
+    const char* env_index_dir = std::getenv("INDEX_DIR");
+    if (!env_index_dir || strlen(env_index_dir) == 0) {
+        lb_error("Error: INDEX_DIR environment variable not set");
         return -1;
     }
+    string index_dir = env_index_dir;
     
-    string index_dir = string(argv[1]);
     ArtistIndex* artist_index = new ArtistIndex(index_dir);
-    artist_index->load();
+    if (!artist_index->load()) {
+        lb_error("Failed to load artist index. INDEX_DIR=%s", index_dir.c_str());
+        delete artist_index;
+        return -1;
+    }
     IndexCache* index_cache = new IndexCache(10);
     
     mapping_search = new MappingSearch(index_dir, artist_index, index_cache);
 
     Catch::Session session;
-    int returnCode = session.run(argc-1, argv+1);
+    int returnCode = session.run(argc, argv);
     
     delete mapping_search;
     delete artist_index;

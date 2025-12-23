@@ -5,8 +5,10 @@
 #include <unordered_set>
 #include <fstream>
 #include <cctype>
+#include <functional>
 #include "utils.hpp"
 #include "unidecode/unidecode.hpp"
+#include <SQLiteCpp/SQLiteCpp.h>
 
 using namespace std;
 
@@ -33,38 +35,41 @@ inline string compute_combined_lookup(const string& artist, const string& record
     return result;
 }
 
-inline string escape_csv(const string& field) {
-    if (field.find(',') == string::npos && 
-        field.find('"') == string::npos &&
-        field.find('\n') == string::npos &&
-        field.find('\r') == string::npos) {
-        return field;
-    }
-    string escaped = "\"";
-    for (char c : field) {
-        if (c == '"') escaped += "\"\"";
-        else escaped += c;
-    }
-    escaped += "\"";
-    return escaped;
-}
+// Structure to hold a mapping row
+struct MappingRowData {
+    int64_t artist_credit_id;
+    string artist_mbids;
+    string artist_credit_name;
+    string artist_credit_sortname;
+    int64_t release_id;
+    string release_mbid;
+    int64_t release_artist_credit_id;
+    string release_name;
+    int64_t recording_id;
+    string recording_mbid;
+    string recording_name;
+    int64_t score;
+};
+
+// Row handler callback type
+using RowHandler = function<void(const MappingRowData&)>;
 
 /**
- * Create the canonical musicbrainz data CSV file directly from the database.
+ * Create the canonical musicbrainz data directly from the database.
  * This skips creating the intermediate PostgreSQL table and does deduplication in memory.
  * 
  * Requires: mapping.canonical_release table to exist first.
  * 
- * Output columns match import.csv ground truth:
+ * Output columns:
  *   artist_credit_id, artist_mbids, artist_credit_name, artist_credit_sortname,
  *   release_id, release_mbid, release_artist_credit_id, release_name,
  *   recording_id, recording_mbid, recording_name, score
  */
 
-// Helper function to process rows from a query result and write to CSV
+// Helper function to process rows from a query result
 // Deduplication is by combined_lookup (artist+recording+release name normalized), keeping lowest score
-inline size_t process_csv_rows(PGresult* res, ofstream& csv_file, unordered_set<string>& seen_lookups,
-                               size_t& total_rows, size_t& written_rows) {
+inline size_t process_rows(PGresult* res, const RowHandler& handler, unordered_set<string>& seen_lookups,
+                           size_t& total_rows, size_t& written_rows) {
     int nrows = PQntuples(res);
     
     for (int i = 0; i < nrows; i++) {
@@ -96,14 +101,33 @@ inline size_t process_csv_rows(PGresult* res, ofstream& csv_file, unordered_set<
             continue;  // Already seen this combined_lookup, skip (keep the one with lower score)
         }
         
-        string recording_mbid = PQgetvalue(res, i, 9);
-        string release_mbid = PQgetvalue(res, i, 5);
+        MappingRowData row;
+        
+        // Parse integers
+        char* val = PQgetvalue(res, i, 0);
+        row.artist_credit_id = (val && *val) ? strtoll(val, nullptr, 10) : 0;
+        val = PQgetvalue(res, i, 4);
+        row.release_id = (val && *val) ? strtoll(val, nullptr, 10) : 0;
+        val = PQgetvalue(res, i, 6);
+        row.release_artist_credit_id = (val && *val) ? strtoll(val, nullptr, 10) : 0;
+        val = PQgetvalue(res, i, 8);
+        row.recording_id = (val && *val) ? strtoll(val, nullptr, 10) : 0;
+        val = PQgetvalue(res, i, 11);
+        row.score = (val && *val) ? strtoll(val, nullptr, 10) : 0;
+        
+        // String fields
+        row.artist_credit_name = artist_credit_name;
+        row.release_name = release_name;
+        row.recording_name = recording_name;
+        row.recording_mbid = PQgetvalue(res, i, 9);
+        row.release_mbid = PQgetvalue(res, i, 5);
         
         // Parse PostgreSQL arrays - remove { } braces
         string artist_mbids = PQgetvalue(res, i, 1);
         if (artist_mbids.length() >= 2 && artist_mbids[0] == '{' && artist_mbids.back() == '}') {
             artist_mbids = artist_mbids.substr(1, artist_mbids.length() - 2);
         }
+        row.artist_mbids = artist_mbids;
         
         // Get first sortname from array for artist_credit_sortname
         string sortnames_raw = PQgetvalue(res, i, 3);
@@ -130,21 +154,10 @@ inline size_t process_csv_rows(PGresult* res, ofstream& csv_file, unordered_set<
                 }
             }
         }
+        row.artist_credit_sortname = artist_credit_sortname;
         
-        // Write CSV row
-        csv_file << PQgetvalue(res, i, 0) << ","
-                 << escape_csv(artist_mbids) << ","
-                 << escape_csv(artist_credit_name) << ","
-                 << escape_csv(artist_credit_sortname) << ","
-                 << PQgetvalue(res, i, 4) << ","
-                 << escape_csv(release_mbid) << ","
-                 << PQgetvalue(res, i, 6) << ","
-                 << escape_csv(release_name) << ","
-                 << PQgetvalue(res, i, 8) << ","
-                 << escape_csv(recording_mbid) << ","
-                 << escape_csv(recording_name) << ","
-                 << PQgetvalue(res, i, 11) << "\n";
-        
+        // Call the handler
+        handler(row);
         written_rows++;
         
         if (total_rows % 1000000 == 0) {
@@ -158,7 +171,7 @@ inline size_t process_csv_rows(PGresult* res, ofstream& csv_file, unordered_set<
 
 // Helper to run a cursor query and process all rows
 inline bool run_cursor_query(PGconn* conn, const string& query, const string& cursor_name,
-                             ofstream& csv_file, unordered_set<string>& seen_pairs,
+                             const RowHandler& handler, unordered_set<string>& seen_lookups,
                              size_t& total_rows, size_t& written_rows) {
     const int FETCH_SIZE = 10000;
     
@@ -185,7 +198,7 @@ inline bool run_cursor_query(PGconn* conn, const string& query, const string& cu
             break;
         }
         
-        process_csv_rows(res, csv_file, seen_pairs, total_rows, written_rows);
+        process_rows(res, handler, seen_lookups, total_rows, written_rows);
         PQclear(res);
     }
     
@@ -195,8 +208,8 @@ inline bool run_cursor_query(PGconn* conn, const string& query, const string& cu
     return true;
 }
 
-inline bool create_canonical_musicbrainz_data_csv(PGconn* conn, const string& csv_path, bool use_minimal_dataset = false) {
-    
+// Build the queries used for canonical musicbrainz data
+inline pair<string, string> build_canonical_queries(bool use_minimal_dataset = false) {
     string artist_filter = "";
     if (use_minimal_dataset) {
         lb_log("Using minimal dataset for testing");
@@ -274,8 +287,20 @@ inline bool create_canonical_musicbrainz_data_csv(PGconn* conn, const string& cs
       ORDER BY ac.id
     )";
     
-    lb_log("Starting canonical musicbrainz data export...");
+    return {query1, query2};
+}
+
+/**
+ * Stream canonical musicbrainz data directly to SQLite database.
+ * This skips writing CSV to disk and inserts directly using prepared statements.
+ */
+inline bool create_canonical_musicbrainz_data_sqlite(PGconn* conn, SQLite::Database& db, bool use_minimal_dataset = false) {
     
+    auto [query1, query2] = build_canonical_queries(use_minimal_dataset);
+    
+    lb_log("Starting canonical musicbrainz data export to SQLite...");
+    
+    // Begin PostgreSQL transaction
     PGresult* res = PQexec(conn, "BEGIN");
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         lb_error("BEGIN failed: %s", PQerrorMessage(conn));
@@ -284,26 +309,56 @@ inline bool create_canonical_musicbrainz_data_csv(PGconn* conn, const string& cs
     }
     PQclear(res);
     
-    ofstream csv_file(csv_path);
-    if (!csv_file.is_open()) {
-        lb_error("Failed to open CSV file: %s", csv_path.c_str());
-        PQexec(conn, "ROLLBACK");
-        return false;
-    }
+    // Configure SQLite for bulk insert and index creation performance
+    db.exec("PRAGMA synchronous = OFF");
+    db.exec("PRAGMA journal_mode = OFF");           // No journaling for bulk operations
+    db.exec("PRAGMA cache_size = -2097152");        // 2GB cache (negative = KB)
+    db.exec("PRAGMA temp_store = MEMORY");          // Keep temp data in RAM
+    db.exec("PRAGMA mmap_size = 8589934592");       // 8GB memory-mapped I/O
+    db.exec("PRAGMA threads = 16");                 // Enable multi-threaded sorting
     
-    // Header
-    csv_file << "artist_credit_id,artist_mbids,artist_credit_name,artist_credit_sortname,"
-             << "release_id,release_mbid,release_artist_credit_id,release_name,"
-             << "recording_id,recording_mbid,recording_name,score\n";
+    // Prepare SQLite insert statement
+    SQLite::Statement stmt(db, 
+        "INSERT INTO mapping VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+    
+    // Begin SQLite transaction
+    db.exec("BEGIN TRANSACTION");
     
     unordered_set<string> seen_lookups;
     size_t total_rows = 0;
     size_t written_rows = 0;
+    size_t batch_count = 0;
+    const size_t COMMIT_INTERVAL = 500000;  // Larger batches = fewer commits
+    
+    // Row handler that inserts directly into SQLite
+    RowHandler sqlite_handler = [&](const MappingRowData& row) {
+        stmt.bind(1, row.artist_credit_id);
+        stmt.bind(2, row.artist_mbids);
+        stmt.bind(3, row.artist_credit_name);
+        stmt.bind(4, row.artist_credit_sortname);
+        stmt.bind(5, row.release_id);
+        stmt.bind(6, row.release_mbid);
+        stmt.bind(7, row.release_artist_credit_id);
+        stmt.bind(8, row.release_name);
+        stmt.bind(9, row.recording_id);
+        stmt.bind(10, row.recording_mbid);
+        stmt.bind(11, row.recording_name);
+        stmt.bind(12, row.score);
+        stmt.exec();
+        stmt.reset();
+        
+        batch_count++;
+        if (batch_count >= COMMIT_INTERVAL) {
+            db.exec("COMMIT");
+            db.exec("BEGIN TRANSACTION");
+            batch_count = 0;
+        }
+    };
     
     // Run Query 1: Recordings with releases
     lb_log("Query 1: Fetching recordings with releases...");
-    if (!run_cursor_query(conn, query1, "cursor1", csv_file, seen_lookups, total_rows, written_rows)) {
-        csv_file.close();
+    if (!run_cursor_query(conn, query1, "cursor1", sqlite_handler, seen_lookups, total_rows, written_rows)) {
+        db.exec("ROLLBACK");
         PQexec(conn, "ROLLBACK");
         return false;
     }
@@ -313,30 +368,31 @@ inline bool create_canonical_musicbrainz_data_csv(PGconn* conn, const string& cs
     // Run Query 2: Standalone recordings
     lb_log("Query 2: Fetching standalone recordings (no releases)...");
     size_t standalone_start = total_rows;
-    if (!run_cursor_query(conn, query2, "cursor2", csv_file, seen_lookups, total_rows, written_rows)) {
-        csv_file.close();
+    if (!run_cursor_query(conn, query2, "cursor2", sqlite_handler, seen_lookups, total_rows, written_rows)) {
+        db.exec("ROLLBACK");
         PQexec(conn, "ROLLBACK");
         return false;
     }
     lb_log("Query 2 complete: %s standalone recordings added",
            format_number(total_rows - standalone_start).c_str());
     
-    csv_file.close();
+    // Commit remaining rows
+    db.exec("COMMIT");
     
     res = PQexec(conn, "COMMIT");
     PQclear(res);
     
-    lb_log("CSV export complete: %s total rows, %s unique rows written", 
+    lb_log("SQLite import complete: %s total rows, %s unique rows written", 
            format_number(total_rows).c_str(), format_number(written_rows).c_str());
     
     return true;
 }
 
 /**
- * Convenience function that connects to the database and creates the CSV.
+ * Convenience function that connects to the database and streams to SQLite.
  * Uses the CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable for connection.
  */
-inline bool create_canonical_musicbrainz_data_csv_from_env(const string& csv_path, bool use_minimal_dataset = false) {
+inline bool create_canonical_musicbrainz_data_sqlite_from_env(SQLite::Database& db, bool use_minimal_dataset = false) {
     const char* conn_str = getenv("CANONICAL_MUSICBRAINZ_DATA_CONNECT");
     if (!conn_str || strlen(conn_str) == 0) {
         lb_error("CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable not set");
@@ -352,7 +408,7 @@ inline bool create_canonical_musicbrainz_data_csv_from_env(const string& csv_pat
         return false;
     }
     
-    bool result = create_canonical_musicbrainz_data_csv(conn, csv_path, use_minimal_dataset);
+    bool result = create_canonical_musicbrainz_data_sqlite(conn, db, use_minimal_dataset);
     
     PQfinish(conn);
     return result;

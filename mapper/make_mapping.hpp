@@ -14,28 +14,9 @@
 
 using namespace std;
 
-struct MappingRow {
-    unsigned int artist_credit_id;
-    string artist_mbids;
-    string artist_credit_name;
-    string artist_credit_sortname;
-    unsigned int release_id;
-    string release_mbid;
-    unsigned int release_artist_credit_id;
-    string release_name;
-    unsigned int recording_id;
-    string recording_mbid;
-    string recording_name;
-    unsigned int score;
-};
-
 class MakeMapping {
 private:
     string index_dir;
-    void create_sqlite_db(const string& db_file);
-    void import_csv_to_sqlite(const string& db_file, const string& csv_file);
-    void create_indexes(const string& db_file);
-    string escape_csv_field(const string& field);
 
 public:
     MakeMapping(const string& _index_dir);

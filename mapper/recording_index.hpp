@@ -113,7 +113,7 @@ class RecordingIndex {
         }
 
         ReleaseRecordingIndex
-        build_recording_release_indexes(unsigned int artist_credit_id) {
+        build_recording_release_indexes(unsigned int artist_credit_id, SQLite::Database &db) {
 
             // Map to track release and recording strings and their indexes 
             map<string, unsigned int>                        release_string_index_map, recording_string_index_map;
@@ -123,7 +123,6 @@ class RecordingIndex {
                 
             try
             {
-                SQLite::Database    db(db_file);
                 SQLite::Statement   query(db, fetch_query);
           
                 query.bind(1, artist_credit_id);
@@ -258,6 +257,13 @@ class RecordingIndex {
             
             ReleaseRecordingIndex ret(recording_index, release_index, links);
             return ret;
+        }
+
+        // Convenience overload that opens its own connection (for backward compatibility)
+        ReleaseRecordingIndex
+        build_recording_release_indexes(unsigned int artist_credit_id) {
+            SQLite::Database db(db_file, SQLite::OPEN_READONLY);
+            return build_recording_release_indexes(artist_credit_id, db);
         }
 
         // Load with external DB connection (for connection reuse in server)

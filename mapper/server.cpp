@@ -165,7 +165,11 @@ int main(int argc, char* argv[]) {
     // Load shared indexes BEFORE starting the server
     lb_log("Loading shared indexes...");
     g_artist_index = new ArtistIndex(g_index_dir);
-    g_artist_index->load();
+    if (!g_artist_index->load()) {
+        lb_error("Failed to load artist index. INDEX_DIR=%s", g_index_dir.c_str());
+        delete g_artist_index;
+        return -1;
+    }
     
     crow::SimpleApp app;
     g_app = &app;  // Store for signal handler

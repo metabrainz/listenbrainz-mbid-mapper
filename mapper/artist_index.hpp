@@ -446,7 +446,7 @@ class ArtistIndex {
         
         void build() {
             
-            lb_log("load and index arist data");
+            lb_log("load and index artist data");
             // TODO: THis process creates duplicates
             load_artist_data(fetch_single_artists_query, single_artist_credit_ids, single_artist_credit_texts);
             load_artist_aliases(single_artist_credit_ids, single_artist_credit_texts);
@@ -628,16 +628,16 @@ class ArtistIndex {
             return false;
         }
 
-        void load() {
+        bool load() {
             if (single_artist_index != nullptr)
                 delete single_artist_index;
             single_artist_index = new FuzzyIndex();
             bool ret = load_index(SINGLE_ARTIST_INDEX_ENTITY_ID, single_artist_index);
             if (!ret) {
-                throw length_error("failed to load single artist index");
+                lb_error("Failed to load single artist index from %s", db_file.c_str());
                 delete single_artist_index;
                 single_artist_index = nullptr;
-                return;
+                return false;
             }
 
             if (multiple_artist_index != nullptr)
@@ -645,10 +645,10 @@ class ArtistIndex {
             multiple_artist_index = new FuzzyIndex();
             ret = load_index(MULTIPLE_ARTIST_INDEX_ENTITY_ID, multiple_artist_index);
             if (!ret) {
-                throw length_error("failed to load multiple artist index");
+                lb_error("Failed to load multiple artist index from %s", db_file.c_str());
                 delete multiple_artist_index;
                 multiple_artist_index = nullptr;
-                return;
+                return false;
             }
 
             if (stupid_artist_index != nullptr)
@@ -656,10 +656,12 @@ class ArtistIndex {
             stupid_artist_index = new FuzzyIndex();
             ret = load_index(STUPID_ARTIST_INDEX_ENTITY_ID, stupid_artist_index);
             if (!ret) {
-                throw length_error("failed to load stupid artist index");
+                lb_error("Failed to load stupid artist index from %s", db_file.c_str());
                 delete stupid_artist_index;
                 stupid_artist_index = nullptr;
-                return;
+                return false;
             }
+            
+            return true;
         }
 };
