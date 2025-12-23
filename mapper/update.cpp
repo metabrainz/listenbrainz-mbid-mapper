@@ -8,8 +8,14 @@
 #include "SQLiteCpp.h"
 #include "changed_data.hpp"
 #include "canonical_release_updater.hpp"
+#include "mapping_update_fetcher.hpp"
+#include "recording_index.hpp"
+#include "mapping_batch_updater.hpp"
 
 using namespace std;
+
+// Batch size for processing artist_credit_ids
+constexpr size_t BATCH_SIZE = 5000;
 
 void print_usage() {
     lb_log("Usage: update [options]");
@@ -122,30 +128,66 @@ int main(int argc, char* argv[]) {
             lb_log("No release_groups to update in canonical_release table");
         }
         
-        // Step 3: Update mapping table in SQLite
-        lb_log("=== Step 3: Updating mapping table ===");
+        // Step 3: Update mapping and indexes in batches
+        lb_log("=== Step 3: Updating mapping table and indexes in batches ===");
         const auto& changed_artist_credits = changed_data.get_changed_artist_credit_ids();
         
         if (!changed_artist_credits.empty()) {
-            // TODO: Implement MappingUpdater (Step 3 of plan)
-            lb_log("TODO: Update %zu artist_credit_ids in mapping table",
-                   changed_artist_credits.size());
+            // Convert set to vector for batching
+            vector<int> ac_ids(changed_artist_credits.begin(), changed_artist_credits.end());
+            
+            size_t total = ac_ids.size();
+            size_t num_batches = (total + BATCH_SIZE - 1) / BATCH_SIZE;
+            
+            lb_log("Processing %zu artist_credit_ids in %zu batches of %zu",
+                   total, num_batches, BATCH_SIZE);
+            
+            MappingUpdateFetcher fetcher(pg_conn);
+            RecordingIndex recording_index(index_dir);
+            recording_index.load_recording_aliases();
+            MappingBatchUpdater updater(db);
+            
+            for (size_t batch_num = 0; batch_num < num_batches; batch_num++) {
+                size_t start_idx = batch_num * BATCH_SIZE;
+                size_t end_idx = min(start_idx + BATCH_SIZE, total);
+                
+                // Build set of IDs for this batch
+                set<int> batch_ids(ac_ids.begin() + start_idx, ac_ids.begin() + end_idx);
+                
+                lb_log("");
+                lb_log("--- Batch %zu/%zu (%zu IDs) ---", 
+                       batch_num + 1, num_batches, batch_ids.size());
+                
+                // Step 3a: Fetch mapping data from PostgreSQL
+                lb_log("Fetching mapping data from PostgreSQL...");
+                vector<MappingRowData> mapping_rows = fetcher.fetch(batch_ids);
+                lb_log("Fetched %zu mapping rows", mapping_rows.size());
+                
+                // Step 3b: Build fuzzy indexes
+                lb_log("Building fuzzy indexes...");
+                map<int, string> index_blobs = recording_index.build_indexes_for_update(batch_ids);
+                lb_log("Built %zu index blobs", index_blobs.size());
+                
+                // Step 3c: Update SQLite atomically
+                lb_log("Updating SQLite database...");
+                if (!updater.update(batch_ids, mapping_rows, index_blobs)) {
+                    lb_error("Batch %zu failed - stopping update", batch_num + 1);
+                    lb_error("Previous batches have been committed, but remaining batches skipped");
+                    PQfinish(pg_conn);
+                    return 1;
+                }
+                
+                lb_log("Batch %zu/%zu complete", batch_num + 1, num_batches);
+            }
+            
+            lb_log("");
+            lb_log("All %zu batches completed successfully", num_batches);
         } else {
             lb_log("No artist_credit_ids to update in mapping table");
         }
         
-        // Step 4: Rebuild fuzzy indexes
-        lb_log("=== Step 4: Rebuilding fuzzy indexes ===");
-        if (!changed_artist_credits.empty()) {
-            // TODO: Implement IndexUpdater (Step 4 of plan)
-            lb_log("TODO: Rebuild indexes for %zu artist_credit_ids",
-                   changed_artist_credits.size());
-        } else {
-            lb_log("No indexes to rebuild");
-        }
-        
-        // Step 5: Save the new timestamp
-        lb_log("=== Step 5: Saving timestamp ===");
+        // Step 4: Save the new timestamp
+        lb_log("=== Step 4: Saving timestamp ===");
         if (!changed_data.save_current_timestamp()) {
             lb_error("Failed to save timestamp");
             PQfinish(pg_conn);

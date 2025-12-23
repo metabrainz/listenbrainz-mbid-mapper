@@ -1,14 +1,9 @@
 1. improve thresholding
 3. empty rows in source mapping
 3. Is there thread level segfault isolation?
-4. Add monitoring
-methods aside, some metrics for understanding how stupid fast the mapper is handling user input [or not, i.e., error rates] (and tracking other things like how big the cache is, how long your db queries are taking), as well as at least surfacing operations that are erroring to somewhere seems prudent in the “relatively soon after the worst of the dirty work is done” term imo
+4. Add monitoring -- add cache items
 
 
 Problematic test case:
 
 
-
-Incremental update process TODO:
-
-1. Write incremental timestamp right when dataset is created

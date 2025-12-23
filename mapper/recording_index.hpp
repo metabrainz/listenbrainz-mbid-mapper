@@ -2,11 +2,14 @@
 #include <stdio.h>
 #include <ctime>
 #include <algorithm>
+#include <thread>
+#include <sstream>
 #include "SQLiteCpp.h"
 #include "fuzzy_index.hpp"
 #include "encode.hpp"
 #include "utils.hpp"
 #include "artist_index.hpp"
+#include "cereal/archives/binary.hpp"
 
 using namespace std;
 
@@ -313,5 +316,121 @@ class RecordingIndex {
         load(const int artist_credit_id) {
             SQLite::Database db(db_file, SQLite::OPEN_READONLY);
             return load(artist_credit_id, db);
+        }
+        
+        /**
+         * Build and serialize index for a single artist_credit_id (for incremental updates).
+         * Returns the serialized blob ready for storage in index_cache.
+         */
+        string build_index_for_update(unsigned int artist_credit_id, SQLite::Database& db) {
+            auto index = build_recording_release_indexes(artist_credit_id, db);
+            
+            stringstream ss;
+            {
+                cereal::BinaryOutputArchive oarchive(ss);
+                oarchive(*index.recording_index);
+                oarchive(*index.release_index);
+                oarchive(index.links);
+            }
+            
+            return ss.str();
+        }
+        
+        /**
+         * Build indexes for a set of artist_credit_ids using parallel threads (for incremental updates).
+         * 
+         * @param artist_credit_ids Set of artist_credit_ids to build indexes for
+         * @param num_threads Number of parallel threads (default 4)
+         * @return Map of artist_credit_id → serialized blob
+         */
+        map<int, string> build_indexes_for_update(const set<int>& artist_credit_ids, int num_threads = 4) {
+            map<int, string> results;
+            
+            if (artist_credit_ids.empty()) {
+                return results;
+            }
+            
+            lb_log("Building indexes for %zu artist_credit_ids using %d threads...", 
+                   artist_credit_ids.size(), num_threads);
+            
+            // Convert to vector for easier indexing
+            vector<int> ids(artist_credit_ids.begin(), artist_credit_ids.end());
+            
+            // Thread result structure
+            struct ThreadResult {
+                unsigned int artist_credit_id;
+                string blob;
+                bool success;
+            };
+            
+            vector<thread> threads;
+            vector<ThreadResult> thread_results(ids.size());
+            
+            // Thread worker lambda
+            auto thread_worker = [this](unsigned int artist_id, ThreadResult* result) {
+                thread_local unique_ptr<SQLite::Database> tl_db;
+                
+                if (!tl_db) {
+                    tl_db = make_unique<SQLite::Database>(db_file, SQLite::OPEN_READONLY);
+                    tl_db->exec("PRAGMA cache_size=-65536;");
+                    tl_db->exec("PRAGMA mmap_size=268435456;");
+                }
+                
+                result->artist_credit_id = artist_id;
+                result->success = true;
+                
+                try {
+                    result->blob = build_index_for_update(artist_id, *tl_db);
+                } catch (const exception& e) {
+                    lb_error("Index build failed for artist_credit_id %u: %s", artist_id, e.what());
+                    result->success = false;
+                }
+            };
+            
+            size_t next_idx = 0;
+            size_t completed = 0;
+            auto start_time = chrono::steady_clock::now();
+            
+            while (completed < ids.size()) {
+                // Start new threads while we have capacity
+                while (threads.size() < (size_t)num_threads && next_idx < ids.size()) {
+                    thread_results[next_idx].artist_credit_id = ids[next_idx];
+                    threads.emplace_back(thread_worker, ids[next_idx], &thread_results[next_idx]);
+                    next_idx++;
+                }
+                
+                // Wait for threads to complete
+                for (auto& t : threads) {
+                    if (t.joinable()) {
+                        t.join();
+                    }
+                }
+                
+                // Collect results
+                for (size_t i = completed; i < next_idx; i++) {
+                    if (thread_results[i].success) {
+                        results[thread_results[i].artist_credit_id] = thread_results[i].blob;
+                    }
+                }
+                
+                completed = next_idx;
+                threads.clear();
+                
+                // Progress reporting
+                if (completed % 100 == 0 && completed > 0) {
+                    auto now = chrono::steady_clock::now();
+                    double elapsed = chrono::duration<double>(now - start_time).count();
+                    double items_per_sec = completed / elapsed;
+                    double remaining = (ids.size() - completed) / items_per_sec;
+                    printf("  Building indexes: %zu/%zu (%.1f/s, ETA: %.0fs)     \r", 
+                           completed, ids.size(), items_per_sec, remaining);
+                    fflush(stdout);
+                }
+            }
+            
+            printf("\n");
+            lb_log("Built %zu indexes", results.size());
+            
+            return results;
         }
 };

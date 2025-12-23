@@ -208,86 +208,126 @@ inline bool run_cursor_query(PGconn* conn, const string& query, const string& cu
     return true;
 }
 
-// Build the queries used for canonical musicbrainz data
-inline pair<string, string> build_canonical_queries(bool use_minimal_dataset = false) {
-    string artist_filter = "";
-    if (use_minimal_dataset) {
-        lb_log("Using minimal dataset for testing");
-        artist_filter = " AND ac.id IN (1160983, 49627, 65, 21238)";
+/**
+ * Build the SQL query for fetching canonical musicbrainz mapping data.
+ * 
+ * @param with_releases true for recordings with releases, false for standalone recordings
+ * @param artist_credit_filter Optional SQL WHERE clause filter for artist_credit_id
+ *                             Examples: "ac.id = ANY($1::int[])" for parameterized query
+ *                                       "ac.id IN (1,2,3)" for specific IDs
+ *                                       "" for no filter (full table)
+ * @return The SQL query string
+ * 
+ * Usage:
+ *   // Full table query (for make_mapping):
+ *   auto query = make_mapping_query(true, "");
+ *   
+ *   // Filtered query for incremental update (parameterized):
+ *   auto query = make_mapping_query(true, "ac.id = ANY($1::int[])");
+ *   
+ *   // Minimal dataset for testing:
+ *   auto query = make_mapping_query(true, "ac.id IN (1160983, 49627, 65, 21238)");
+ */
+inline string make_mapping_query(bool with_releases, const string& artist_credit_filter = "") {
+    string where_clause;
+    string extra_where;
+    
+    if (with_releases) {
+        // For recordings with releases, base WHERE is just 1=1 (always true)
+        where_clause = "1=1";
+    } else {
+        // For standalone recordings, filter out those with tracks
+        where_clause = "NOT EXISTS (SELECT 1 FROM musicbrainz.track t WHERE t.recording = r.id)";
     }
     
-    // Query 1: Recordings with releases - one row per (recording, release) pair
-    // DISTINCT removes duplicates from same recording on multiple tracks of same release
-    // ORDER BY score (cr.id) first so we see the best score for each combined_lookup first
-    string query1 = R"(
-        SELECT DISTINCT
-               ac.id AS artist_credit_id
-             , s.artist_mbids
-             , ac.name AS artist_credit_name
-             , s.artist_sortnames
-             , rl.id AS release_id
-             , rl.gid::TEXT AS release_mbid
-             , rl.artist_credit AS release_artist_credit_id
-             , rl.name AS release_name
-             , r.id AS recording_id
-             , r.gid::TEXT AS recording_mbid
-             , r.name AS recording_name
-             , cr.id AS score
-          FROM musicbrainz.recording r
-          JOIN musicbrainz.artist_credit ac
-            ON r.artist_credit = ac.id
-          JOIN musicbrainz.track t
-            ON t.recording = r.id
-          JOIN musicbrainz.medium m
-            ON m.id = t.medium
-          JOIN musicbrainz.release rl
-            ON rl.id = m.release
-          JOIN mapping.canonical_release cr
-            ON rl.id = cr.release
-          JOIN (SELECT artist_credit
-                     , array_agg(a.gid ORDER BY position) AS artist_mbids
-                     , array_agg(a.sort_name ORDER BY position) AS artist_sortnames
-                  FROM musicbrainz.artist_credit_name acn2
-                  JOIN musicbrainz.artist a
-                    ON acn2.artist = a.id
-              GROUP BY acn2.artist_credit) s
-            ON ac.id = s.artist_credit
-         WHERE 1=1 )" + artist_filter + R"(
-      ORDER BY cr.id, ac.id
-    )";
+    // Add optional artist_credit filter
+    if (!artist_credit_filter.empty()) {
+        extra_where = " AND " + artist_credit_filter;
+    }
     
-    // Query 2: Standalone recordings (no tracks/releases) - slower, run separately
-    string query2 = R"(
-        SELECT DISTINCT
-               ac.id AS artist_credit_id
-             , s.artist_mbids
-             , ac.name AS artist_credit_name
-             , s.artist_sortnames
-             , 4294967295 AS release_id
-             , ''::TEXT AS release_mbid
-             , 4294967295 AS release_artist_credit_id
-             , '' AS release_name
-             , r.id AS recording_id
-             , r.gid::TEXT AS recording_mbid
-             , r.name AS recording_name
-             , 4294967295 AS score
-          FROM musicbrainz.recording r
-          JOIN musicbrainz.artist_credit ac
-            ON r.artist_credit = ac.id
-          JOIN (SELECT artist_credit
-                     , array_agg(a.gid ORDER BY position) AS artist_mbids
-                     , array_agg(a.sort_name ORDER BY position) AS artist_sortnames
-                  FROM musicbrainz.artist_credit_name acn2
-                  JOIN musicbrainz.artist a
-                    ON acn2.artist = a.id
-              GROUP BY acn2.artist_credit) s
-            ON ac.id = s.artist_credit
-         WHERE NOT EXISTS (SELECT 1 FROM musicbrainz.track t WHERE t.recording = r.id)
-           )" + artist_filter + R"(
-      ORDER BY ac.id
-    )";
+    if (with_releases) {
+        // Query for recordings with releases - one row per (recording, release) pair
+        // DISTINCT removes duplicates from same recording on multiple tracks of same release
+        // ORDER BY score (cr.id) first so we see the best score for each combined_lookup first
+        return R"(
+            SELECT DISTINCT
+                   ac.id AS artist_credit_id
+                 , s.artist_mbids
+                 , ac.name AS artist_credit_name
+                 , s.artist_sortnames
+                 , rl.id AS release_id
+                 , rl.gid::TEXT AS release_mbid
+                 , rl.artist_credit AS release_artist_credit_id
+                 , rl.name AS release_name
+                 , r.id AS recording_id
+                 , r.gid::TEXT AS recording_mbid
+                 , r.name AS recording_name
+                 , cr.id AS score
+              FROM musicbrainz.recording r
+              JOIN musicbrainz.artist_credit ac
+                ON r.artist_credit = ac.id
+              JOIN musicbrainz.track t
+                ON t.recording = r.id
+              JOIN musicbrainz.medium m
+                ON m.id = t.medium
+              JOIN musicbrainz.release rl
+                ON rl.id = m.release
+              JOIN mapping.canonical_release cr
+                ON rl.id = cr.release
+              JOIN (SELECT artist_credit
+                         , array_agg(a.gid ORDER BY position) AS artist_mbids
+                         , array_agg(a.sort_name ORDER BY position) AS artist_sortnames
+                      FROM musicbrainz.artist_credit_name acn2
+                      JOIN musicbrainz.artist a
+                        ON acn2.artist = a.id
+                  GROUP BY acn2.artist_credit) s
+                ON ac.id = s.artist_credit
+             WHERE )" + where_clause + extra_where + R"(
+          ORDER BY cr.id, ac.id
+        )";
+    } else {
+        // Query for standalone recordings (no tracks/releases)
+        return R"(
+            SELECT DISTINCT
+                   ac.id AS artist_credit_id
+                 , s.artist_mbids
+                 , ac.name AS artist_credit_name
+                 , s.artist_sortnames
+                 , 4294967295 AS release_id
+                 , ''::TEXT AS release_mbid
+                 , 4294967295 AS release_artist_credit_id
+                 , '' AS release_name
+                 , r.id AS recording_id
+                 , r.gid::TEXT AS recording_mbid
+                 , r.name AS recording_name
+                 , 4294967295 AS score
+              FROM musicbrainz.recording r
+              JOIN musicbrainz.artist_credit ac
+                ON r.artist_credit = ac.id
+              JOIN (SELECT artist_credit
+                         , array_agg(a.gid ORDER BY position) AS artist_mbids
+                         , array_agg(a.sort_name ORDER BY position) AS artist_sortnames
+                      FROM musicbrainz.artist_credit_name acn2
+                      JOIN musicbrainz.artist a
+                        ON acn2.artist = a.id
+                  GROUP BY acn2.artist_credit) s
+                ON ac.id = s.artist_credit
+             WHERE )" + where_clause + extra_where + R"(
+          ORDER BY ac.id
+        )";
+    }
+}
+
+// Build the queries used for canonical musicbrainz data (full table)
+// This is a convenience wrapper for backward compatibility
+inline pair<string, string> build_canonical_queries(bool use_minimal_dataset = false) {
+    string filter = "";
+    if (use_minimal_dataset) {
+        lb_log("Using minimal dataset for testing");
+        filter = "ac.id IN (1160983, 49627, 65, 21238)";
+    }
     
-    return {query1, query2};
+    return {make_mapping_query(true, filter), make_mapping_query(false, filter)};
 }
 
 /**
