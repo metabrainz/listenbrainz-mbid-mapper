@@ -3,6 +3,7 @@
 #include "indexer_thread.hpp"
 #include "custom_sorts.hpp"
 #include "canonical_release.hpp"
+#include "canonical_musicbrainz_data.hpp"
 #include <libpq-fe.h>
 #include <cstdlib>
 #include <cstdio>
@@ -245,14 +246,14 @@ void MakeMapping::create() {
     PQfinish(conn);
     lb_log("\nWrote %d rows to CSV", row_count);
     
-    lb_log("Importing CSV into SQLite...");
-    import_csv_to_sqlite(db_file, csv_file);
-    
-    lb_log("Creating indexes...");
-    create_indexes(db_file);
+//    lb_log("Importing CSV into SQLite...");
+//    import_csv_to_sqlite(db_file, csv_file);
+//    
+//    lb_log("Creating indexes...");
+//    create_indexes(db_file);
     
     // Clean up CSV file
-    std::filesystem::remove(csv_file);
+//    std::filesystem::remove(csv_file);
     
     auto t1 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
@@ -505,11 +506,20 @@ int main(int argc, char *argv[])
             return -1;
         }
         
-        // Create canonical release table
-        if (!create_canonical_release_table_from_env()) {
-            lb_error("Failed to create canonical release table");
+//        // Create canonical release table
+//        if (!create_canonical_release_table_from_env()) {
+//            lb_error("Failed to create canonical release table");
+//            return -1;
+//        }
+        
+        // Create canonical musicbrainz data CSV
+        string csv_file = index_dir + "/canonical_musicbrainz_data.csv";
+        if (!create_canonical_musicbrainz_data_csv_from_env(csv_file)) {
+            lb_error("Failed to create canonical musicbrainz data CSV");
             return -1;
         }
+        
+//        lb_log("Mapping data export completed successfully!");
         
 //        MakeMapping importer(index_dir);
 //        importer.create();

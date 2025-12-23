@@ -80,6 +80,19 @@ inline void lb_error(const char *format, ...) {
     va_end(args);
 }
 
+/**
+ * Format a number with comma separators (e.g., 1234567 -> "1,234,567")
+ */
+inline string format_number(size_t n) {
+    string s = to_string(n);
+    int insert_pos = s.length() - 3;
+    while (insert_pos > 0) {
+        s.insert(insert_pos, ",");
+        insert_pos -= 3;
+    }
+    return s;
+}
+
 // Load environment variables from a .env file
 // Only sets variables that are not already set in the environment
 // (environment variables take precedence over .env file)

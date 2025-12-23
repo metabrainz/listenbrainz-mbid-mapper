@@ -223,13 +223,9 @@ inline int insert_format_rows(PGconn* conn, int sort_index, const vector<pair<in
  * Ensure the mapping schema exists
  */
 inline bool ensure_mapping_schema(PGconn* conn) {
-    lb_log("Checking if mapping schema exists...");
-    
     if (!execute_sql(conn, "CREATE SCHEMA IF NOT EXISTS mapping", "Failed to create mapping schema")) {
         return false;
     }
-    
-    lb_log("Mapping schema ready.");
     return true;
 }
 
@@ -237,8 +233,6 @@ inline bool ensure_mapping_schema(PGconn* conn) {
  * Create the format_sort table
  */
 inline bool create_format_sort_table(PGconn* conn) {
-    lb_log("Creating format_sort table...");
-    
     if (!execute_sql(conn, "DROP TABLE IF EXISTS mapping.format_sort", "Failed to drop format_sort table")) {
         return false;
     }
@@ -276,8 +270,6 @@ inline bool create_format_sort_table(PGconn* conn) {
  * Create the release_group_secondary_type_sort table
  */
 inline bool create_release_group_secondary_type_sort_table(PGconn* conn) {
-    lb_log("Creating release_group_secondary_type_sort table...");
-    
     if (!execute_sql(conn, "DROP TABLE IF EXISTS mapping.release_group_secondary_type_sort",
                      "Failed to drop release_group_secondary_type_sort table")) {
         return false;
@@ -322,8 +314,6 @@ inline bool create_release_group_secondary_type_sort_table(PGconn* conn) {
  * Create the release_group_combined_type_sort table
  */
 inline bool create_release_group_combined_type_sort_table(PGconn* conn) {
-    lb_log("Creating release_group_combined_type_sort table...");
-    
     if (!execute_sql(conn, "DROP TABLE IF EXISTS mapping.release_group_combined_type_sort",
                      "Failed to drop release_group_combined_type_sort table")) {
         return false;
@@ -432,7 +422,6 @@ inline bool create_custom_sort_tables_from_env() {
         return false;
     }
     
-    lb_log("Connecting to PostgreSQL...");
     PGconn* conn = PQconnectdb(db_connect);
     
     if (PQstatus(conn) != CONNECTION_OK) {

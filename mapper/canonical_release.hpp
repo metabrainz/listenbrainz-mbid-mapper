@@ -72,6 +72,7 @@ public:
         return R"(
             SELECT r.id AS release
                  , r.gid AS release_mbid
+                 , rg.id AS release_group
               FROM musicbrainz.release_group rg
               JOIN musicbrainz.release r
                 ON rg.id = r.release_group
@@ -109,13 +110,13 @@ public:
      * Process a single row from the query result.
      * Returns true if the row was added (not a duplicate), false otherwise.
      */
-    bool process_row(int release_id, const string& release_mbid) {
-        // Deduplicate by release ID
-        if (release_index.count(release_id) > 0) {
+    bool process_row(int release_id, const string& release_mbid, int release_group_id) {
+        // Deduplicate by release_group ID - we want ONE canonical release per release_group
+        if (release_index.count(release_group_id) > 0) {
             return false;
         }
         
-        release_index.insert(release_id);
+        release_index.insert(release_group_id);
         
         // Add row: release, release_mbid
         return add_row({
@@ -181,11 +182,13 @@ public:
                 for (int i = 0; i < num_rows; i++) {
                     char* release_val = PQgetvalue(result, i, 0);
                     char* mbid_val = PQgetvalue(result, i, 1);
+                    char* rg_val = PQgetvalue(result, i, 2);
                     
                     int release_id = release_val ? atoi(release_val) : 0;
                     string release_mbid = mbid_val ? mbid_val : "";
+                    int release_group_id = rg_val ? atoi(rg_val) : 0;
                     
-                    if (process_row(release_id, release_mbid)) {
+                    if (process_row(release_id, release_mbid, release_group_id)) {
                         total_rows_inserted++;
                     }
                     total_rows_processed++;
