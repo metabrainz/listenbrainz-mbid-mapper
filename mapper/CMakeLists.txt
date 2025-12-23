@@ -36,6 +36,7 @@ add_executable(test test.cpp tfidf_vectorizer.cpp levenshtein.cpp)
 add_executable(explore explore.cpp tfidf_vectorizer.cpp levenshtein.cpp)
 add_executable(make_mapping make_mapping.cpp tfidf_vectorizer.cpp)
 add_executable(server server.cpp tfidf_vectorizer.cpp levenshtein.cpp)
+add_executable(update update.cpp tfidf_vectorizer.cpp)
 
 include_directories(deps/nmslib/similarity_search/include
                     deps/unidecode/include
@@ -102,4 +103,15 @@ target_link_libraries(server NonMetricSpaceLib
                              SQLiteCpp
                              pthread
                              cereal
+)
+
+target_link_libraries(update NonMetricSpaceLib
+                             unidecode
+                             pcre2-8-static
+                             armadillo
+                             SQLiteCpp
+                             pthread
+                             cereal
+                             pq
+                             bsd
 )

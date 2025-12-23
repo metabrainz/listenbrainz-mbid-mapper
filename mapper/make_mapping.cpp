@@ -4,6 +4,7 @@
 #include "custom_sorts.hpp"
 #include "canonical_release.hpp"
 #include "canonical_musicbrainz_data.hpp"
+#include "changed_data.hpp"
 #include <libpq-fe.h>
 #include <cstdlib>
 #include <cstdio>
@@ -48,7 +49,6 @@ void MakeMapping::create() {
         throw std::runtime_error("PostgreSQL connection failed");
     }
 
-#if 0
     // Create custom sort tables
     lb_log("Creating custom sort tables...");
     if (!create_custom_sort_tables(conn)) {
@@ -63,7 +63,6 @@ void MakeMapping::create() {
         PQfinish(conn);
         throw std::runtime_error("Failed to create canonical release table");
     }
-#endif 
 
     // Create SQLite database and stream data directly into it
     lb_log("Creating SQLite database: %s", db_file.c_str());
@@ -101,6 +100,13 @@ void MakeMapping::create() {
     if (!create_canonical_musicbrainz_data_sqlite(conn, db)) {
         PQfinish(conn);
         throw std::runtime_error("Failed to stream data to SQLite");
+    }
+    
+    // Initialize update_metadata table with current timestamp for incremental updates
+    lb_log("Initializing update timestamp for incremental updates...");
+    if (!initialize_update_timestamp(conn, db)) {
+        PQfinish(conn);
+        throw std::runtime_error("Failed to initialize update timestamp");
     }
     
     PQfinish(conn);

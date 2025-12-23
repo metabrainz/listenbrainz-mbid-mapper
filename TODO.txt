@@ -7,3 +7,8 @@ methods aside, some metrics for understanding how stupid fast the mapper is hand
 
 Problematic test case:
 
+
+
+Incremental update process TODO:
+
+1. Write incremental timestamp right when dataset is created

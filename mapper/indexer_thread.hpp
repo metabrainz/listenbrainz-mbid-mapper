@@ -25,7 +25,7 @@ const char *fetch_pending_artists_query = R"(
             SELECT artist_credit_id, count(*) as cnt 
               FROM artist_ids 
              WHERE artist_credit_id > 2 
-          GROUP BY artist_credit_id order by cnt desc)";
+          GROUP BY artist_credit_id)";
 
 class CreatorThread {
     public:
