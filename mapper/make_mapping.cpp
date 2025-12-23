@@ -1,6 +1,7 @@
 #include "make_mapping.hpp"
 #include "artist_index.hpp"
 #include "indexer_thread.hpp"
+#include "custom_sorts.hpp"
 #include <libpq-fe.h>
 #include <cstdlib>
 #include <cstdio>
@@ -497,9 +498,15 @@ int main(int argc, char *argv[])
     }
     
     try {
-        MakeMapping importer(index_dir);
-        importer.create();
-        lb_log("Mapping import completed successfully!");
+        // Create custom sort tables in PostgreSQL first
+        if (!create_custom_sort_tables_from_env()) {
+            lb_error("Failed to create custom sort tables");
+            return -1;
+        }
+        
+//        MakeMapping importer(index_dir);
+//        importer.create();
+//        lb_log("Mapping import completed successfully!");
     } catch (const std::exception& e) {
         lb_error("Error: %s", e.what());
         return -1;

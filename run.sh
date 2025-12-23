@@ -17,6 +17,7 @@ COMMAND_BINARIES["make_mapping"]="/mapper/make_mapping"
 COMMAND_BINARIES["make_indexes"]="/mapper/make_indexes"
 COMMAND_BINARIES["explore"]="/mapper/explore"
 COMMAND_BINARIES["shell"]=""  # handled specially
+COMMAND_BINARIES["psql"]=""   # handled specially
 
 usage() {
     echo "Usage: $0 <command> [options...]"
@@ -29,6 +30,7 @@ usage() {
     echo "  make_indexes - Build the search indexes (artist and recording) used for the cache"
     echo "  explore      - Run the interactive explorer shell (debugging the mapping)"
     echo "  shell        - Open a bash shell in the container"
+    echo "  psql         - Open a psql shell to the MusicBrainz database"
     echo ""
     echo "Options are passed to the container process (e.g., --skip-artists, --force-rebuild)"
     echo ""
@@ -84,6 +86,9 @@ DOCKER_OPTS=(
 if [ "$COMMAND" = "shell" ]; then
     echo "Opening interactive shell..."
     docker run "${DOCKER_OPTS[@]}" -it "$IMAGE_NAME" /bin/bash
+elif [ "$COMMAND" = "psql" ]; then
+    echo "Opening psql shell..."
+    docker exec -it musicbrainz-docker-db-1 psql -U musicbrainz musicbrainz_db
 else
     BIN="${COMMAND_BINARIES[$COMMAND]}"
     if [ -z "$BIN" ]; then
