@@ -2,6 +2,7 @@
 #include "artist_index.hpp"
 #include "indexer_thread.hpp"
 #include "custom_sorts.hpp"
+#include "canonical_release.hpp"
 #include <libpq-fe.h>
 #include <cstdlib>
 #include <cstdio>
@@ -501,6 +502,12 @@ int main(int argc, char *argv[])
         // Create custom sort tables in PostgreSQL first
         if (!create_custom_sort_tables_from_env()) {
             lb_error("Failed to create custom sort tables");
+            return -1;
+        }
+        
+        // Create canonical release table
+        if (!create_canonical_release_table_from_env()) {
+            lb_error("Failed to create canonical release table");
             return -1;
         }
         
