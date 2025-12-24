@@ -105,12 +105,22 @@ private:
     )";
     
     // Releases that were updated - affects all recordings on those releases
+    // Gets the recording's artist_credit for each recording on updated releases
     static constexpr const char* CHANGED_ARTIST_CREDITS_FROM_RELEASES = R"(
         SELECT DISTINCT rec.artist_credit
           FROM musicbrainz.release rl
           JOIN musicbrainz.medium m ON m.release = rl.id
           JOIN musicbrainz.track t ON t.medium = m.id
           JOIN musicbrainz.recording rec ON rec.id = t.recording
+         WHERE rl.last_updated > $1::timestamp
+    )";
+    
+    // Releases that were updated - also get the release's own artist_credit
+    // This is needed because we index recordings by both their own artist_credit
+    // and the release's artist_credit (for VA compilations, soundtracks, etc.)
+    static constexpr const char* CHANGED_RELEASE_ARTIST_CREDITS = R"(
+        SELECT DISTINCT rl.artist_credit
+          FROM musicbrainz.release rl
          WHERE rl.last_updated > $1::timestamp
     )";
     
@@ -286,7 +296,9 @@ public:
         if (!execute_and_collect(CHANGED_ARTIST_CREDITS_FROM_RECORDINGS,
                                   "recordings", changed_artist_credit_ids)) return false;
         if (!execute_and_collect(CHANGED_ARTIST_CREDITS_FROM_RELEASES,
-                                  "releases", changed_artist_credit_ids)) return false;
+                                  "releases (recording artists)", changed_artist_credit_ids)) return false;
+        if (!execute_and_collect(CHANGED_RELEASE_ARTIST_CREDITS,
+                                  "releases (release artists)", changed_artist_credit_ids)) return false;
         if (!execute_and_collect(CHANGED_ARTIST_CREDITS_FROM_ARTISTS,
                                   "artists", changed_artist_credit_ids)) return false;
         if (!execute_and_collect(CHANGED_ARTIST_CREDITS_DIRECT,
