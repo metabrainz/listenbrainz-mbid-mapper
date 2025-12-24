@@ -215,7 +215,7 @@ class Explorer {
             }
             else {
                 // Try encoding for "stupid artists" (non-Latin characters, etc.)
-                auto stupid_name = encode.encode_string_for_stupid_artists(query);
+                auto stupid_name = encode.encode_string_keep_non_word(query);
                 if (!stupid_name.size()) {
                     printf("Could not encode query: '%s'\n", query.c_str());
                     return;
@@ -341,7 +341,7 @@ class Explorer {
             vector<IndexResult> *res = nullptr;
             
             // For stupid artist index, we always use stupid encoding
-            auto stupid_name = encode.encode_string_for_stupid_artists(query);
+            auto stupid_name = encode.encode_string_keep_non_word(query);
             if (!stupid_name.size()) {
                 printf("Could not encode query for stupid artists: '%s'\n", query.c_str());
                 return;
