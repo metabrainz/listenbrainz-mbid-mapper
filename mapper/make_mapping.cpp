@@ -109,6 +109,13 @@ void MakeMapping::create() {
         throw std::runtime_error("Failed to initialize update timestamp");
     }
     
+    // Create PostgreSQL table with artist_credit_ids for artist index queries
+    lb_log("Creating PostgreSQL table for artist index queries...");
+    if (!create_artist_credit_id_table(conn, db)) {
+        PQfinish(conn);
+        throw std::runtime_error("Failed to create artist_credit_id table");
+    }
+    
     PQfinish(conn);
     
     // Create indexes on the mapping table

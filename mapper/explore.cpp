@@ -18,6 +18,7 @@
 #include "fsm.hpp"
 #include "encode.hpp"
 #include "utils.hpp"
+#include "init.h"  // nmslib init
 
 using namespace std;
 
@@ -57,7 +58,7 @@ class Explorer {
             index_dir = _index_dir;
             artist_index = new ArtistIndex(index_dir);
             recording_index = new RecordingIndex(index_dir);
-            index_cache = new IndexCache(25);  // 25MB cache
+            index_cache = new IndexCache();
             mapping_search = new MappingSearch(index_dir, artist_index, index_cache);
         }
         
@@ -514,9 +515,7 @@ class Explorer {
                 
                 printf("\n");
                 
-                // Clean up
-                delete data->recording_index;
-                delete data->release_index;
+                // Clean up - destructor handles recording_index and release_index
                 delete data;
                 
             } catch (const std::exception& e) {
@@ -879,8 +878,11 @@ void print_usage() {
 }
 
 int main(int argc, char* argv[]) {
-    init_logging();
+    init_logging(LOG_DEBUG);
     load_env_file();  // Load .env file, env vars take precedence
+    
+    // Initialize nmslib once in main thread before any FuzzyIndex is created
+    similarity::initLibrary(0, LIB_LOGNONE, NULL);
     
     // Parse arguments (options only)
     for (int i = 1; i < argc; i++) {

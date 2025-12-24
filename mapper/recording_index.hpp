@@ -32,18 +32,28 @@ ReleaseRecordingIndex::~ReleaseRecordingIndex() {
 // the serialized binary representation. This is an empirical estimate.
 const float MEMORY_SIZE_RATIO = 3.0;
 
+// Use UNION instead of OR for better index usage
 const char *fetch_query = R"(
       SELECT artist_credit_id   
            , release_id  
-           , m.release_artist_credit_id   
+           , release_artist_credit_id   
            , release_name   
            , recording_id  
            , recording_name 
            , score AS rank  
-        FROM mapping m  
-       WHERE release_artist_credit_id = ? 
-          OR artist_credit_id = ?
-    ORDER BY score, m.release_id
+        FROM mapping
+       WHERE artist_credit_id = ?
+       UNION
+      SELECT artist_credit_id   
+           , release_id  
+           , release_artist_credit_id   
+           , release_name   
+           , recording_id  
+           , recording_name 
+           , score AS rank  
+        FROM mapping
+       WHERE release_artist_credit_id = ?
+    ORDER BY rank, release_id
 )";
 
 const char *fetch_recording_aliases_query = R"(
@@ -297,7 +307,7 @@ class RecordingIndex {
                     size_t estimated_memory = (size_t)(blob_size * MEMORY_SIZE_RATIO);
                     return new ReleaseRecordingIndex(recording_index, release_index, links, estimated_memory);
                 } else {
-                    lb_error("Cannot load index for %d", artist_credit_id);
+                    //lb_error("Cannot load index for %d", artist_credit_id);
                     delete recording_index;
                     delete release_index;
                     return nullptr;

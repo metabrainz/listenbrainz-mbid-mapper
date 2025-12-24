@@ -20,23 +20,28 @@ const int SINGLE_ARTIST_INDEX_ENTITY_ID = -1;
 const int MULTIPLE_ARTIST_INDEX_ENTITY_ID = -2;
 const int STUPID_ARTIST_INDEX_ENTITY_ID = -3;
 
+// CTE prefix that provides artist_credit_ids from mapping.mapper_canonical_musicbrainz_data
+const char *acs_cte_prefix = R"(
+WITH acs AS (
+    SELECT DISTINCT artist_credit_id FROM mapping.mapper_canonical_musicbrainz_data
+)
+)";
+
 // Fetch artist names for artist credits with artist_count = 1
 const char *fetch_single_artists_query = R"(
-WITH acs AS ( 
-   SELECT DISTINCT artist_credit_id  
-     FROM mapping.canonical_musicbrainz_data_release_support 
-    WHERE artist_credit_id > 1
+WITH acs AS (
+    SELECT DISTINCT artist_credit_id FROM mapping.mapper_canonical_musicbrainz_data
 )
   select ac.id as artist_credit_id
        , ac.name as artist_credit_name
        , array_agg(a.sort_name::text ORDER BY acn.position) as artist_credit_sortname
        , array_agg(acn.join_phrase::text ORDER BY acn.position) as artist_credit_join_phrase      
-    from artist_credit ac
+    from musicbrainz.artist_credit ac
     join acs 
       on ac.id = acs.artist_credit_id 
-    join artist_credit_name acn
+    join musicbrainz.artist_credit_name acn
       on acn.artist_credit = ac.id
-    join artist a
+    join musicbrainz.artist a
       on acn.artist = a.id
    where artist_count = 1
      and a.id > 1
@@ -46,21 +51,19 @@ order by ac.id
 
 // Fetch artist names for artist credits with artist_count > 1
 const char *fetch_multiple_artists_query = R"(
-WITH acs AS ( 
-   SELECT DISTINCT artist_credit_id  
-     FROM mapping.canonical_musicbrainz_data_release_support 
-    WHERE artist_credit_id > 1
+WITH acs AS (
+    SELECT DISTINCT artist_credit_id FROM mapping.mapper_canonical_musicbrainz_data
 )
   select ac.id as artist_credit_id
        , ac.name as artist_credit_name
        , array_agg(a.sort_name::text ORDER BY acn.position) as artist_credit_sortname
        , array_agg(acn.join_phrase::text ORDER BY acn.position) as artist_credit_join_phrase      
-    from artist_credit ac
+    from musicbrainz.artist_credit ac
     join acs 
       on ac.id = acs.artist_credit_id 
-    join artist_credit_name acn
+    join musicbrainz.artist_credit_name acn
       on acn.artist_credit = ac.id
-    join artist a
+    join musicbrainz.artist a
       on acn.artist = a.id
    where artist_count > 1
      and a.id > 1
@@ -69,21 +72,19 @@ order by ac.id
 )";
 
 const char *fetch_artist_aliases_query = R"(
-WITH acs AS ( 
-   SELECT DISTINCT artist_credit_id  
-     FROM mapping.canonical_musicbrainz_data_release_support 
-    WHERE artist_credit_id > 1
+WITH acs AS (
+    SELECT DISTINCT artist_credit_id FROM mapping.mapper_canonical_musicbrainz_data
 )
   select ac.id as artist_credit_id
        , aa.name as artist_credit_name     
-    from artist_credit ac 
+    from musicbrainz.artist_credit ac 
     join acs 
       on ac.id = acs.artist_credit_id 
-    join artist_credit_name acn
+    join musicbrainz.artist_credit_name acn
       on acn.artist_credit = ac.id
-    join artist a
+    join musicbrainz.artist a
       on acn.artist = a.id
-    join artist_alias aa
+    join musicbrainz.artist_alias aa
       on aa.artist = a.id      
    where artist_count = 1
      and a.id > 1

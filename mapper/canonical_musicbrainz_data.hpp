@@ -453,3 +453,98 @@ inline bool create_canonical_musicbrainz_data_sqlite_from_env(SQLite::Database& 
     PQfinish(conn);
     return result;
 }
+/**
+ * Creates the mapping.mapper_canonical_musicbrainz_data table in PostgreSQL
+ * with artist_credit_ids extracted from the SQLite mapping.
+ * This table is used by artist_index.hpp queries to join against MusicBrainz
+ * artist data.
+ */
+inline bool create_artist_credit_id_table(PGconn* pg_conn, SQLite::Database& sqlite_db) {
+    lb_log("Creating mapping.mapper_canonical_musicbrainz_data table...");
+    
+    // Drop existing table if it exists
+    PGresult* res = PQexec(pg_conn, "DROP TABLE IF EXISTS mapping.mapper_canonical_musicbrainz_data");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        lb_error("Failed to drop existing table: %s", PQerrorMessage(pg_conn));
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+    
+    // Create the table (without primary key constraint for faster bulk insert)
+    res = PQexec(pg_conn, R"(
+        CREATE UNLOGGED TABLE mapping.mapper_canonical_musicbrainz_data (
+            artist_credit_id INTEGER NOT NULL
+        )
+    )");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        lb_error("Failed to create table: %s", PQerrorMessage(pg_conn));
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+    
+    // Use COPY for fast bulk insert
+    res = PQexec(pg_conn, "COPY mapping.mapper_canonical_musicbrainz_data (artist_credit_id) FROM STDIN");
+    if (PQresultStatus(res) != PGRES_COPY_IN) {
+        lb_error("Failed to start COPY: %s", PQerrorMessage(pg_conn));
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+    
+    // Query distinct artist_credit_ids from SQLite and send via COPY
+    SQLite::Statement query(sqlite_db, "SELECT DISTINCT artist_credit_id FROM mapping ORDER BY artist_credit_id");
+    
+    long inserted = 0;
+    char buffer[32];
+    while (query.executeStep()) {
+        int artist_credit_id = query.getColumn(0).getInt();
+        
+        int len = snprintf(buffer, sizeof(buffer), "%d\n", artist_credit_id);
+        if (PQputCopyData(pg_conn, buffer, len) != 1) {
+            lb_error("Failed to send COPY data: %s", PQerrorMessage(pg_conn));
+            PQputCopyEnd(pg_conn, "error");
+            return false;
+        }
+        inserted++;
+        
+        if (inserted % 500000 == 0) {
+            lb_log("  Sent %s artist_credit_ids...", format_number(inserted).c_str());
+        }
+    }
+    
+    // End COPY
+    if (PQputCopyEnd(pg_conn, nullptr) != 1) {
+        lb_error("Failed to end COPY: %s", PQerrorMessage(pg_conn));
+        return false;
+    }
+    
+    // Get result of COPY
+    res = PQgetResult(pg_conn);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        lb_error("COPY failed: %s", PQerrorMessage(pg_conn));
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+    
+    // Create index after bulk insert (faster than having PK during insert)
+    lb_log("Creating index on artist_credit_id...");
+    res = PQexec(pg_conn, "CREATE INDEX mapper_canonical_musicbrainz_data_idx ON mapping.mapper_canonical_musicbrainz_data (artist_credit_id)");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        lb_error("Failed to create index: %s", PQerrorMessage(pg_conn));
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+    
+    // Analyze for query planner
+    res = PQexec(pg_conn, "ANALYZE mapping.mapper_canonical_musicbrainz_data");
+    PQclear(res);
+    
+    lb_log("Created mapping.mapper_canonical_musicbrainz_data with %s artist_credit_ids", 
+           format_number(inserted).c_str());
+    
+    return true;
+}

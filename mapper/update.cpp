@@ -12,6 +12,7 @@
 #include "recording_index.hpp"
 #include "mapping_batch_updater.hpp"
 #include "artist_index.hpp"
+#include "init.h"  // nmslib init
 
 using namespace std;
 
@@ -34,6 +35,9 @@ void print_usage() {
 int main(int argc, char* argv[]) {
     init_logging();
     load_env_file();
+    
+    // Initialize nmslib once in main thread before any FuzzyIndex is created
+    similarity::initLibrary(0, LIB_LOGNONE, NULL);
     
     bool dry_run = true;  // Default to dry-run for safety
     

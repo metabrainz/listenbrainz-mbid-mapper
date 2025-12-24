@@ -187,9 +187,11 @@ class SearchFunctions {
 
             vector<IndexResult> *rel_results = release_recording_index->release_index->search(release_name_encoded, .7, 'l');
             if (rel_results != nullptr && rel_results->size()) {
-                // Sort results by confidence in descending order
+                // Sort results by confidence (desc), then by id (asc) for deterministic ordering
                 sort(rel_results->begin(), rel_results->end(), [](const IndexResult& a, const IndexResult& b) {
-                    return a.confidence > b.confidence;
+                    if (a.confidence != b.confidence)
+                        return a.confidence > b.confidence;
+                    return a.id < b.id;
                 });
                 
                 for(auto &result : *rel_results) {
@@ -216,9 +218,11 @@ class SearchFunctions {
 
             vector<IndexResult> *rec_results = release_recording_index->recording_index->search(recording_name_encoded, .7, 'c');
             if (rec_results != nullptr && rec_results->size()) {
-                // Sort results by confidence in descending order
+                // Sort results by confidence (desc), then by id (asc) for deterministic ordering
                 sort(rec_results->begin(), rec_results->end(), [](const IndexResult& a, const IndexResult& b) {
-                    return a.confidence > b.confidence;
+                    if (a.confidence != b.confidence)
+                        return a.confidence > b.confidence;
+                    return a.id < b.id;
                 });
                 
                 for(auto &result : *rec_results) {

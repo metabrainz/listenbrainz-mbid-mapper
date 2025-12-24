@@ -12,29 +12,32 @@ Usage:
 
 Environment variables:
     MAPPER_HOST: Base URL of the mapper service (default: http://localhost:5000)
-    TEST_DATA_FILE: Path to JSONL file with listens (default: ../listens_test_data/listens.jsonl)
+    TEST_DATA_FILE: Path to JSONL file with listens (default: ../listen_test_data/listens.jsonl)
 """
 
 import json
+import logging
 import os
 import random
-from itertools import islice
 from locust import HttpUser, task, between, events
 from locust.runners import MasterRunner
 
+logger = logging.getLogger(__name__)
 
 # Configuration
 DEFAULT_HOST = os.environ.get("MAPPER_HOST", "http://localhost:5000")
-TEST_DATA_FILE = os.environ.get("TEST_DATA_FILE", "../listens/listens.jsonl")
-BUFFER_SIZE = int(os.environ.get("TEST_BUFFER_SIZE", "1000"))
+TEST_DATA_FILE = os.environ.get("TEST_DATA_FILE", "../listen_test_data/listens.jsonl")
 
 
-def test_case_generator(filepath: str):
+def load_all_test_cases(filepath: str) -> list:
     """
-    Generator that yields test cases from a JSONL file one line at a time.
+    Load all test cases from a JSONL file into memory.
     
     JSONL format: {"track_metadata": {"artist_name": "...", "release_name": "...", "track_name": "..."}, ...}
+    
+    Returns a list of all test cases.
     """
+    test_cases = []
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -43,83 +46,72 @@ def test_case_generator(filepath: str):
             try:
                 data = json.loads(line)
                 track_metadata = data.get("track_metadata", {})
-                print("%s, %s, %s" % (track_metadata.get("artist_name", ""), track_metadata.get("release_name", ""), track_metadata.get("track_name", "")))
-                yield {
+                test_cases.append({
                     "artist_credit_name": track_metadata.get("artist_name", ""),
                     "release_name": track_metadata.get("release_name", ""),
                     "recording_name": track_metadata.get("track_name", "")
-                }
+                })
             except json.JSONDecodeError:
                 continue  # Skip malformed lines
+    return test_cases
 
 
-class TestCaseBuffer:
+class TestCaseIterator:
     """
-    Maintains a rotating buffer of test cases for random sampling.
+    Iterates through ALL test cases before repeating.
     
-    Loads test cases incrementally and maintains a fixed-size buffer
-    for random selection without loading the entire dataset.
+    Loads all test cases into memory once, shuffles them, and iterates
+    through the entire dataset before reshuffling and repeating.
+    Thread-safe for use by multiple Locust users.
     """
     
-    def __init__(self, filepath: str, buffer_size: int = 1000):
+    def __init__(self, filepath: str):
         self.filepath = filepath
-        self.buffer_size = buffer_size
-        self.buffer = []
-        self._generator = None
-        self._exhausted = False
-        self._refill_buffer()
+        self.test_cases = []
+        self._index = 0
+        self._load_and_shuffle()
     
-    def _refill_buffer(self):
-        """Refill buffer from generator, restarting file if exhausted."""
-        if self._exhausted or self._generator is None:
-            self._generator = test_case_generator(self.filepath)
-            self._exhausted = False
-        
-        # Fill buffer up to buffer_size
+    def _load_and_shuffle(self):
+        """Load all test cases and shuffle them."""
         try:
-            new_items = list(islice(self._generator, self.buffer_size - len(self.buffer)))
-            if not new_items:
-                self._exhausted = True
-                # Restart from beginning if we've exhausted the file
-                self._generator = test_case_generator(self.filepath)
-                new_items = list(islice(self._generator, self.buffer_size - len(self.buffer)))
-            self.buffer.extend(new_items)
+            self.test_cases = load_all_test_cases(self.filepath)
+            random.shuffle(self.test_cases)
+            self._index = 0
+            logger.info(f"Loaded {len(self.test_cases):,} test cases from {self.filepath}")
         except FileNotFoundError:
-            pass  # File doesn't exist, buffer stays empty
+            logger.warning(f"Test data file not found: {self.filepath}")
+            self.test_cases = []
     
-    def get_random(self) -> dict:
-        """Get a random test case from the buffer."""
-        if not self.buffer:
+    def get_next(self) -> dict:
+        """Get the next test case, reshuffling when all have been used."""
+        if not self.test_cases:
             return None
         
-        # Get random item and replace it with a new one from generator
-        idx = random.randrange(len(self.buffer))
-        item = self.buffer[idx]
+        # Get current item
+        item = self.test_cases[self._index]
+        self._index += 1
         
-        # Try to get a replacement from the generator
-        try:
-            replacement = next(self._generator)
-            self.buffer[idx] = replacement
-        except (StopIteration, TypeError):
-            self._exhausted = True
-            # Optionally restart the generator
-            self._generator = test_case_generator(self.filepath)
+        # Reshuffle when we've gone through all cases
+        if self._index >= len(self.test_cases):
+            random.shuffle(self.test_cases)
+            self._index = 0
+            logger.info(f"Completed full iteration of {len(self.test_cases):,} test cases, reshuffling...")
         
         return item
 
 
-# Shared buffer across all users (loaded once)
-_shared_buffer = None
+# Shared iterator across all users (loaded once)
+_shared_iterator = None
 
 
-def get_shared_buffer() -> TestCaseBuffer:
-    """Get or create the shared test case buffer."""
-    global _shared_buffer
-    if _shared_buffer is None:
+def get_shared_iterator() -> TestCaseIterator:
+    """Get or create the shared test case iterator."""
+    global _shared_iterator
+    if _shared_iterator is None:
         test_file = os.path.join(os.path.dirname(__file__), TEST_DATA_FILE)
         if os.path.exists(test_file):
-            _shared_buffer = TestCaseBuffer(test_file, BUFFER_SIZE)
-    return _shared_buffer
+            _shared_iterator = TestCaseIterator(test_file)
+    return _shared_iterator
 
 
 class MappingUser(HttpUser):
@@ -138,8 +130,8 @@ class MappingUser(HttpUser):
     
     def on_start(self):
         """Called when a simulated user starts."""
-        # Use shared buffer if available, otherwise fall back to defaults
-        self._buffer = get_shared_buffer()
+        # Use shared iterator if available, otherwise fall back to defaults
+        self._iterator = get_shared_iterator()
         self._fallback_cases = self._get_fallback_cases()
     
     def _get_fallback_cases(self) -> list:
@@ -172,10 +164,10 @@ class MappingUser(HttpUser):
             },
         ]
     
-    def _get_random_test_case(self) -> dict:
-        """Get a random test case from the buffer or fallback."""
-        if self._buffer:
-            case = self._buffer.get_random()
+    def _get_next_test_case(self) -> dict:
+        """Get the next test case from the iterator or fallback."""
+        if self._iterator:
+            case = self._iterator.get_next()
             if case:
                 return case
         
@@ -189,7 +181,7 @@ class MappingUser(HttpUser):
         
         This is the most common type of lookup with all fields populated.
         """
-        test_case = self._get_random_test_case()
+        test_case = self._get_next_test_case()
         
         params = {
             "artist_credit_name": test_case["artist_credit_name"],
@@ -223,7 +215,7 @@ class MappingUser(HttpUser):
         
         Tests the lookup behavior when release information is not available.
         """
-        test_case = self._get_random_test_case()
+        test_case = self._get_next_test_case()
         
         params = {
             "artist_credit_name": test_case["artist_credit_name"],

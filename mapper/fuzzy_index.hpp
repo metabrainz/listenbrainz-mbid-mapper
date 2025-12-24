@@ -48,7 +48,6 @@ class FuzzyIndex {
         FuzzyIndex() :
      	    vectorizer(false, false) {
 
-            similarity::initLibrary(0, LIB_LOGNONE, NULL);
             space = similarity::SpaceFactoryRegistry<float>::Instance().CreateSpace("negdotprod_sparse_fast",
                                                                                     similarity::AnyParams());
         }

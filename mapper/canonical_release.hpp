@@ -15,12 +15,16 @@ const vector<int> TEST_ARTIST_IDS = {1160983, 49627, 65, 21238};
 /**
  * This class creates the canonical release table.
  * 
- * The canonical release table contains one row per release, selecting the
- * "best" release from each release group based on format, date, country, etc.
+ * The canonical release table contains ALL releases ordered by format, date, country, etc.
+ * The SERIAL id column provides a score where lower = better.
+ * 
+ * Deduplication is by release_id (to avoid duplicates from multiple mediums per release),
+ * NOT by release_group. This ensures all releases from a release_group are included,
+ * allowing bonus tracks on non-standard editions to be found.
  */
 class CanonicalRelease : public BulkInsertTable {
 private:
-    set<int> release_index;  // Track seen releases to deduplicate
+    set<int> release_index;  // Track seen release IDs to deduplicate
     bool use_minimal_dataset;
 
 public:
@@ -108,15 +112,19 @@ public:
 
     /**
      * Process a single row from the query result.
-     * Returns true if the row was added (not a duplicate), false otherwise.
+     * Deduplicates by release_id (not release_group) to avoid duplicates from multiple mediums.
+     * All releases from a release_group are included, just not the same release twice.
+     * Returns true if the row was added, false if it was a duplicate.
      */
     bool process_row(int release_id, const string& release_mbid, int release_group_id) {
-        // Deduplicate by release_group ID - we want ONE canonical release per release_group
-        if (release_index.count(release_group_id) > 0) {
+        (void)release_group_id;  // Not used for deduplication
+        
+        // Deduplicate by release ID - avoid same release appearing twice (from multiple mediums)
+        if (release_index.count(release_id) > 0) {
             return false;
         }
         
-        release_index.insert(release_group_id);
+        release_index.insert(release_id);
         
         // Add row: release, release_mbid
         return add_row({
@@ -149,14 +157,24 @@ public:
             
             lb_log("%s: execute query %zu of %zu", table_name.c_str(), query_idx + 1, query_modes.size());
             
+            // Begin transaction for cursor
+            PGresult* result = PQexec(conn, "BEGIN");
+            if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+                lb_error("BEGIN failed: %s", PQerrorMessage(conn));
+                PQclear(result);
+                return false;
+            }
+            PQclear(result);
+            
             // Use a cursor for large result sets
             string cursor_name = "canonical_release_cursor";
             string cursor_sql = "DECLARE " + cursor_name + " CURSOR FOR " + query;
             
-            PGresult* result = PQexec(conn, cursor_sql.c_str());
+            result = PQexec(conn, cursor_sql.c_str());
             if (PQresultStatus(result) != PGRES_COMMAND_OK) {
                 lb_error("DECLARE CURSOR failed: %s", PQerrorMessage(conn));
                 PQclear(result);
+                PQexec(conn, "ROLLBACK");
                 return false;
             }
             PQclear(result);
@@ -202,8 +220,16 @@ public:
                 }
             }
             
-            // Close cursor
+            // Close cursor and commit transaction
             result = PQexec(conn, ("CLOSE " + cursor_name).c_str());
+            PQclear(result);
+            
+            result = PQexec(conn, "COMMIT");
+            if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+                lb_error("COMMIT failed: %s", PQerrorMessage(conn));
+                PQclear(result);
+                return false;
+            }
             PQclear(result);
             
             lb_log("%s: query %zu complete, processed %d rows", 

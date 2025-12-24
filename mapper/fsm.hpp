@@ -297,7 +297,9 @@ class MappingSearch {
             
             if (artist_matches->size()) {
                 sort(artist_matches->begin(), artist_matches->end(), [](const IndexResult& a, const IndexResult& b) {
-                    return a.confidence > b.confidence;
+                    if (a.confidence != b.confidence)
+                        return a.confidence > b.confidence;
+                    return a.id < b.id;  // Lower IDs first for equal confidence
                 });
 
                 lb_debug("    ARTIST RESULTS:");

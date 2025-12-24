@@ -9,6 +9,7 @@ Problematic test case:
 
 Incremental updates:
   -- Update artist/whatever indexes
+  -- Check that locust test cases are varied enough
 
 notes:
 

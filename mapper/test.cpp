@@ -5,6 +5,7 @@
 #include <iterator>
 #include "fsm.hpp"
 #include "test_cases.hpp"
+#include "init.h"  // nmslib init
 
 #ifdef INFO
 #undef INFO
@@ -103,6 +104,9 @@ int main(int argc, char* argv[]) {
     init_logging();
     load_env_file();  // Load .env file, env vars take precedence
     
+    // Initialize nmslib once in main thread before any FuzzyIndex is created
+    similarity::initLibrary(0, LIB_LOGNONE, NULL);
+    
     const char* env_index_dir = std::getenv("INDEX_DIR");
     if (!env_index_dir || strlen(env_index_dir) == 0) {
         lb_error("Error: INDEX_DIR environment variable not set");
@@ -116,7 +120,7 @@ int main(int argc, char* argv[]) {
         delete artist_index;
         return -1;
     }
-    IndexCache* index_cache = new IndexCache(10);
+    IndexCache* index_cache = new IndexCache();
     
     mapping_search = new MappingSearch(index_dir, artist_index, index_cache);
 

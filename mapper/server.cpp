@@ -11,6 +11,7 @@
 #include "fsm.hpp"
 #include "statistics.hpp"
 #include "test_cases.hpp"
+#include "init.h"  // nmslib init
 
 using namespace std;
 
@@ -28,7 +29,8 @@ void signal_handler(int signum) {
 // Shared resources (created once, shared across all threads)
 static string g_index_dir = "/data";
 static string g_templates_dir = "/mapper/templates";
-static int g_max_process_size = 100;  // max RSS in MB
+static size_t g_max_cache_items = 50000;
+static size_t g_cache_trim_count = 10000;
 static int g_cache_cleaner_delay = 60;  // seconds between cache cleaner checks
 static int g_num_threads = 0;  // 0 = use all available cores
 static int g_timeout = 30;  // connection timeout in seconds (default Crow is 5, too short for complex queries)
@@ -83,7 +85,8 @@ void print_usage() {
     lb_log("  PORT             Port number to listen on (default: 5000)");
     lb_log("  TEMPLATE_DIR     Templates directory (default: /mapper/templates)");
     lb_log("  NUM_THREADS      Number of worker threads (0 = auto, default: 0)");
-    lb_log("  MAX_PROCESS_SIZE Max process RSS size in MB (default: 100)");
+    lb_log("  MAX_CACHE_ITEMS  Max items in index cache (default: 50000)");
+    lb_log("  CACHE_TRIM_COUNT Items below max to trim cache to (default: 10000)");
     lb_log("  CACHE_CLEANER_DELAY  Seconds between cache cleaner checks (default: 60)");
     lb_log("  TIMEOUT          Connection timeout in seconds (default: 30)");
 }
@@ -91,6 +94,9 @@ void print_usage() {
 int main(int argc, char* argv[]) {
     init_logging();
     load_env_file();  // Load .env file, env vars take precedence
+    
+    // Initialize nmslib once in main thread before any FuzzyIndex is created
+    similarity::initLibrary(0, LIB_LOGNONE, NULL);
     
     // Parse arguments (options only)
     for (int i = 1; i < argc; i++) {
@@ -140,12 +146,17 @@ int main(int argc, char* argv[]) {
         if (g_num_threads < 0) g_num_threads = 0;
     }
     
-    const char* env_max_process_size = std::getenv("MAX_PROCESS_SIZE");
-    if (env_max_process_size && strlen(env_max_process_size) > 0) {
-        g_max_process_size = atoi(env_max_process_size);
-        if (g_max_process_size < 1) g_max_process_size = 100;
+    const char* env_max_cache_items = std::getenv("MAX_CACHE_ITEMS");
+    if (env_max_cache_items && strlen(env_max_cache_items) > 0) {
+        g_max_cache_items = atoi(env_max_cache_items);
+        if (g_max_cache_items < 1000) g_max_cache_items = 50000;
     }
-    lb_log("Max process size: %d MB", g_max_process_size);
+    
+    const char* env_cache_trim_count = std::getenv("CACHE_TRIM_COUNT");
+    if (env_cache_trim_count && strlen(env_cache_trim_count) > 0) {
+        g_cache_trim_count = atoi(env_cache_trim_count);
+        if (g_cache_trim_count < 100) g_cache_trim_count = 10000;
+    }
     
     const char* env_cache_cleaner_delay = std::getenv("CACHE_CLEANER_DELAY");
     if (env_cache_cleaner_delay && strlen(env_cache_cleaner_delay) > 0) {
@@ -180,7 +191,7 @@ int main(int argc, char* argv[]) {
     std::signal(SIGTERM, signal_handler);
 
     // Create index cache
-    g_index_cache = new IndexCache(g_max_process_size, g_cache_cleaner_delay);
+    g_index_cache = new IndexCache(g_max_cache_items, g_cache_trim_count, g_cache_cleaner_delay);
     g_index_cache->start();
 
     g_ready = true;

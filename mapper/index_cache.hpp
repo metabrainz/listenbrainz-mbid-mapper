@@ -12,8 +12,6 @@
 using namespace std;
 
 
-const float CLEANING_TARGET_RATIO = 0.9;
-
 struct CacheEntry {
     ReleaseRecordingIndex *data;
     atomic<int>            ref_count;
@@ -28,23 +26,20 @@ class IndexCache {
         map<unsigned int, CacheEntry*>  index;
         mutex                           mtx;
         thread                         *cleaner_thread;
-        size_t                          max_memory_mb;         // max overall RSS in MB
-        size_t                          target_memory_mb;      // target RSS after cleaning
+        size_t                          max_cache_items;
+        size_t                          cache_trim_count;
         int                             cleaner_delay_secs;    // seconds between cleaner checks
         atomic<bool>                    stop;
 
     public:
 
-        // Memory usage limit is specified in MB (applies to overall process RSS)
         // cleaner_delay is seconds between cache cleaner checks
-        IndexCache(int _max_memory_mb, int _cleaner_delay_secs = 60) { 
+        IndexCache(size_t _max_cache_items = 50000, size_t _cache_trim_count = 10000, int _cleaner_delay_secs = 60) { 
             stop = false;
             cleaner_thread = nullptr;
-            max_memory_mb = (size_t)_max_memory_mb;
-            target_memory_mb = (size_t)(max_memory_mb * CLEANING_TARGET_RATIO);
+            max_cache_items = _max_cache_items;
+            cache_trim_count = _cache_trim_count;
             cleaner_delay_secs = _cleaner_delay_secs;
-            lb_log("Index cache created: max RSS %zuMB, target %zuMB, cleaner delay %ds", 
-                   max_memory_mb, target_memory_mb, cleaner_delay_secs);
         }
         
         ~IndexCache() {
@@ -73,29 +68,38 @@ class IndexCache {
         
         void
         trim() {
-            size_t start_rss = get_current_rss_mb();
-            lb_log("Cache trim starting: RSS %zuMB, target %zuMB", start_rss, target_memory_mb);
+            size_t start_count;
             
             // Phase 1: Build candidate list - lock briefly
             vector<pair<unsigned int, time_t>> candidates;
             {
                 lock_guard<mutex> lock(mtx);
+                start_count = index.size();
                 for (const auto &item : index) {
                     if (item.second->ref_count == 0) {
                         candidates.push_back({item.first, item.second->last_accessed});
                     }
                 }
-                lb_log("  %zu candidates (ref_count==0) out of %zu total entries", 
-                       candidates.size(), index.size());
             }
+            
+            lb_debug("Cache trim starting: %zu items, %zu candidates (ref_count==0)", 
+                   start_count, candidates.size());
             
             // Phase 2: Sort candidates by last_accessed (oldest first) - no lock needed
             sort(candidates.begin(), candidates.end(), 
                  [](const auto& a, const auto& b) { return a.second < b.second; });
             
-            // Phase 3: Delete items one at a time, acquiring lock briefly for each
+            // Phase 3: Delete until cache size is below target (MAX - TRIM)
+            size_t target_count = max_cache_items - cache_trim_count;
             int deleted_count = 0;
             for (const auto &candidate : candidates) {
+                // Check current size
+                {
+                    lock_guard<mutex> lock(mtx);
+                    if (index.size() <= target_count)
+                        break;
+                }
+                    
                 {
                     lock_guard<mutex> lock(mtx);
                     auto iter = index.find(candidate.first);
@@ -107,24 +111,15 @@ class IndexCache {
                         deleted_count++;
                     }
                 }
-                
-                // Small delay to let other threads use the cache
-                this_thread::sleep_for(chrono::milliseconds(1));
-                
-                // Check if we've freed enough (check RSS periodically, not every iteration)
-                if (deleted_count % 10 == 0) {
-                    size_t current_rss = get_current_rss_mb();
-                    if (current_rss <= target_memory_mb) {
-                        lb_log("Cache trim complete: RSS %zuMB (deleted %d entries)", 
-                               current_rss, deleted_count);
-                        return;
-                    }
-                }
             }
             
-            size_t end_rss = get_current_rss_mb();
-            lb_log("Cache trim finished: RSS %zuMB (was %zuMB, deleted %d entries, target was %zuMB)", 
-                   end_rss, start_rss, deleted_count, target_memory_mb);
+            size_t end_count;
+            {
+                lock_guard<mutex> lock(mtx);
+                end_count = index.size();
+            }
+            lb_debug("Cache trim finished: %zu items (was %zu, deleted %d, target %zu)", 
+                   end_count, start_count, deleted_count, target_count);
         }
         
         // Cache takes ownership of data. Returns the cached pointer (which may differ from input
@@ -177,20 +172,20 @@ class IndexCache {
         }
         
         void cache_cleaner() {
-            lb_log("Cache cleaner started: max RSS %zuMB, check every %ds", max_memory_mb, cleaner_delay_secs);
+            lb_log("Cache cleaner started: max %zu items, check every %ds", max_cache_items, cleaner_delay_secs);
 
             while(!stop) {
                 for(int i = 0; i < cleaner_delay_secs && !stop; i++)
                     this_thread::sleep_for(chrono::seconds(1));
                 
-                size_t current_rss = get_current_rss_mb();
-                if (current_rss >= max_memory_mb) {
-                    lb_log("Cache cleaner triggered: RSS %zuMB >= %zuMB max", current_rss, max_memory_mb);
+                size_t current_count = get_cache_entry_count();
+                if (current_count >= max_cache_items) {
+                    lb_debug("Cache cleaner triggered: %zu items >= %zu max", current_count, max_cache_items);
                     trim();
                 }
-                else
-                    lb_log("Cache cleaner not triggered: RSS %zuMB < %zuMB max", current_rss, max_memory_mb);
             }
+            lb_log("Cache cleaner exit.");
+
         }
         
         void start() {
