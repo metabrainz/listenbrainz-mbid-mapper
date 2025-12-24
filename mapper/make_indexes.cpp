@@ -80,11 +80,14 @@ int main(int argc, char *argv[])
     }
    
     // Clear cache if force rebuild is requested
+    // Drop the index first, delete cache, then recreate index at the end - faster for bulk operations
+    string db_file = index_dir + "/mapping.db";
     if (force_rebuild) {
-        lb_log("force rebuild requested - clearing index cache");
+        lb_log("force rebuild requested - dropping index and clearing cache");
         try {
-            string db_file = index_dir + "/mapping.db";
             SQLite::Database db(db_file, SQLite::OPEN_READWRITE);
+            db.exec("DROP INDEX IF EXISTS entity_id_idx");
+            lb_log("entity_id_idx dropped");
             db.exec("DELETE FROM index_cache");
             lb_log("index cache cleared successfully");
         } catch (const std::exception& e) {
@@ -115,6 +118,19 @@ int main(int argc, char *argv[])
     lb_log("build recording indexes with %d threads", num_threads);
     IndexerThread mapping(index_dir, num_threads);
     mapping.build_recording_indexes();
+
+    // Recreate the index after force rebuild
+    if (force_rebuild) {
+        lb_log("recreating entity_id_idx index");
+        try {
+            SQLite::Database db(db_file, SQLite::OPEN_READWRITE);
+            db.exec("CREATE INDEX IF NOT EXISTS entity_id_idx ON index_cache(entity_id)");
+            lb_log("entity_id_idx recreated successfully");
+        } catch (const std::exception& e) {
+            lb_error("Error recreating index: %s", e.what());
+            return -1;
+        }
+    }
 
     return 0;
 }
