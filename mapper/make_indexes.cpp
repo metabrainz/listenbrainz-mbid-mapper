@@ -93,6 +93,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Initialize nmslib once in main thread before ANY FuzzyIndex is created
+    // This is necessary because initLibrary() is not thread-safe (it modifies global registries)
+    similarity::initLibrary(0, LIB_LOGNONE, NULL);
+
     if (!skip_artists) {
         lb_log("build artist indexes");
         ArtistIndex *artist_index = new ArtistIndex(index_dir);
@@ -107,10 +111,6 @@ int main(int argc, char *argv[])
     // 0 means use number of CPU cores
     num_threads = (num_threads <= 0) ? std::thread::hardware_concurrency() : num_threads;
     if (num_threads <= 0) num_threads = 4;  // fallback if hardware_concurrency() fails
-
-    // Initialize nmslib once in main thread before spawning worker threads
-    // This is necessary because initLibrary() is not thread-safe (it modifies global registries)
-    similarity::initLibrary(0, LIB_LOGNONE, NULL);
                                             
     lb_log("build recording indexes with %d threads", num_threads);
     IndexerThread mapping(index_dir, num_threads);

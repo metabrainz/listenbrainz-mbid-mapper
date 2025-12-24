@@ -453,10 +453,20 @@ class ArtistIndex {
             lb_log("Building artist indexes...");
             
             // --- Single artist index ---
-            auto index_start = high_resolution_clock::now();
+            lb_log("  [Single artist index]");
+            auto phase_start = high_resolution_clock::now();
             
             load_artist_data(fetch_single_artists_query, single_artist_credit_ids, single_artist_credit_texts);
+            auto t1 = high_resolution_clock::now();
+            lb_log("    load_artist_data: %ld ms (%zu artists)", 
+                   duration_cast<milliseconds>(t1 - phase_start).count(),
+                   single_artist_credit_ids.size());
+            
             load_artist_aliases(single_artist_credit_ids, single_artist_credit_texts);
+            auto t2 = high_resolution_clock::now();
+            lb_log("    load_artist_aliases: %ld ms (%zu total entries now)", 
+                   duration_cast<milliseconds>(t2 - t1).count(),
+                   single_artist_credit_ids.size());
             
             set<pair<unsigned int, string>> unique_artist_data, stupid_artist_data;
             vector<unsigned int> single_ids, multiple_ids, stupid_ids;
@@ -487,15 +497,33 @@ class ArtistIndex {
                 stupid_texts.push_back(it.second);
             }
             set<pair<unsigned int, string>>().swap(stupid_artist_data);
+            
+            auto t3 = high_resolution_clock::now();
+            lb_log("    encode strings: %ld ms (%zu single, %zu stupid)", 
+                   duration_cast<milliseconds>(t3 - t2).count(),
+                   single_ids.size(), stupid_ids.size());
 
             {
                 FuzzyIndex *single_artist_index = new FuzzyIndex();
+                auto t4 = high_resolution_clock::now();
+                lb_log("    FuzzyIndex constructor: %ld ms", 
+                       duration_cast<milliseconds>(t4 - t3).count());
+                
                 single_artist_index->build(single_ids, single_texts);
+                auto t5 = high_resolution_clock::now();
+                lb_log("    FuzzyIndex::build: %ld ms", 
+                       duration_cast<milliseconds>(t5 - t4).count());
+                
                 std::stringstream ss_single;
                 {
                     cereal::BinaryOutputArchive oarchive(ss_single);
                     oarchive(*single_artist_index);
                 }
+                auto t6 = high_resolution_clock::now();
+                lb_log("    serialize: %ld ms (%zu bytes)", 
+                       duration_cast<milliseconds>(t6 - t5).count(),
+                       ss_single.str().length());
+                
                 delete single_artist_index;
                 vector<unsigned int>().swap(single_ids);
                 vector<string>().swap(single_texts);
@@ -513,23 +541,42 @@ class ArtistIndex {
                 {
                     printf("save single artist index db exception: %s\n", e.what());
                 }
+                auto t7 = high_resolution_clock::now();
+                lb_log("    save to SQLite: %ld ms", 
+                       duration_cast<milliseconds>(t7 - t6).count());
             }
             
             auto index_end = high_resolution_clock::now();
-            auto index_sec = duration_cast<seconds>(index_end - index_start).count();
-            lb_log("  Single artist index: %ld seconds", index_sec);
+            lb_log("  Single artist index TOTAL: %ld seconds", 
+                   duration_cast<seconds>(index_end - phase_start).count());
       
             // --- Stupid artist index ---
-            index_start = high_resolution_clock::now();
+            lb_log("  [Stupid artist index]");
+            phase_start = high_resolution_clock::now();
             {
                 if (stupid_ids.size()) {
+                    lb_log("    %zu stupid artists to index", stupid_ids.size());
+                    
                     FuzzyIndex *stupid_artist_index = new FuzzyIndex();
+                    auto ts1 = high_resolution_clock::now();
+                    lb_log("    FuzzyIndex constructor: %ld ms", 
+                           duration_cast<milliseconds>(ts1 - phase_start).count());
+                    
                     stupid_artist_index->build(stupid_ids, stupid_texts);
+                    auto ts2 = high_resolution_clock::now();
+                    lb_log("    FuzzyIndex::build: %ld ms", 
+                           duration_cast<milliseconds>(ts2 - ts1).count());
+                    
                     std::stringstream ss_stupid;
                     {
                         cereal::BinaryOutputArchive oarchive(ss_stupid);
                         oarchive(*stupid_artist_index);
                     }
+                    auto ts3 = high_resolution_clock::now();
+                    lb_log("    serialize: %ld ms (%zu bytes)", 
+                           duration_cast<milliseconds>(ts3 - ts2).count(),
+                           ss_stupid.str().length());
+                    
                     delete stupid_artist_index;
 
                     try
@@ -545,19 +592,29 @@ class ArtistIndex {
                     {
                         printf("save stupid artist index db exception: %s\n", e.what());
                     }
+                    auto ts4 = high_resolution_clock::now();
+                    lb_log("    save to SQLite: %ld ms", 
+                           duration_cast<milliseconds>(ts4 - ts3).count());
                     
                     vector<unsigned int>().swap(stupid_ids);
                     vector<string>().swap(stupid_texts);
+                } else {
+                    lb_log("    no stupid artists to index");
                 }
             }
             index_end = high_resolution_clock::now();
-            index_sec = duration_cast<seconds>(index_end - index_start).count();
-            lb_log("  Stupid artist index: %ld seconds", index_sec);
+            lb_log("  Stupid artist index TOTAL: %ld seconds", 
+                   duration_cast<seconds>(index_end - phase_start).count());
 
             // --- Multiple artist index ---
-            index_start = high_resolution_clock::now();
+            lb_log("  [Multiple artist index]");
+            phase_start = high_resolution_clock::now();
             
             load_artist_data(fetch_multiple_artists_query, multiple_artist_credit_ids, multiple_artist_credit_texts);
+            auto tm1 = high_resolution_clock::now();
+            lb_log("    load_artist_data: %ld ms (%zu artists)", 
+                   duration_cast<milliseconds>(tm1 - phase_start).count(),
+                   multiple_artist_credit_ids.size());
 
             for(unsigned int i = 0; i < multiple_artist_credit_ids.size(); i++) {
                 auto ret = encode.encode_string(multiple_artist_credit_texts[i]);
@@ -571,16 +628,33 @@ class ArtistIndex {
             }
             vector<unsigned int>().swap(multiple_artist_credit_ids);
             vector<string>().swap(multiple_artist_credit_texts);
+            
+            auto tm2 = high_resolution_clock::now();
+            lb_log("    encode strings: %ld ms (%zu multiple artists)", 
+                   duration_cast<milliseconds>(tm2 - tm1).count(),
+                   multiple_ids.size());
 
             {
                 FuzzyIndex *multiple_artist_index = new FuzzyIndex();
+                auto tm3 = high_resolution_clock::now();
+                lb_log("    FuzzyIndex constructor: %ld ms", 
+                       duration_cast<milliseconds>(tm3 - tm2).count());
+                
                 multiple_artist_index->build(multiple_ids, multiple_texts);
+                auto tm4 = high_resolution_clock::now();
+                lb_log("    FuzzyIndex::build: %ld ms", 
+                       duration_cast<milliseconds>(tm4 - tm3).count());
 
                 std::stringstream ss_multiple;
                 {
                     cereal::BinaryOutputArchive oarchive(ss_multiple);
                     oarchive(*multiple_artist_index);
                 }
+                auto tm5 = high_resolution_clock::now();
+                lb_log("    serialize: %ld ms (%zu bytes)", 
+                       duration_cast<milliseconds>(tm5 - tm4).count(),
+                       ss_multiple.str().length());
+                
                 delete multiple_artist_index;
                 vector<unsigned int>().swap(multiple_ids);
                 vector<string>().swap(multiple_texts);
@@ -598,11 +672,14 @@ class ArtistIndex {
                 {
                     printf("save multiple artist index db exception: %s\n", e.what());
                 }
+                auto tm6 = high_resolution_clock::now();
+                lb_log("    save to SQLite: %ld ms", 
+                       duration_cast<milliseconds>(tm6 - tm5).count());
             }
             
             index_end = high_resolution_clock::now();
-            index_sec = duration_cast<seconds>(index_end - index_start).count();
-            lb_log("  Multiple artist index: %ld seconds", index_sec);
+            lb_log("  Multiple artist index TOTAL: %ld seconds", 
+                   duration_cast<seconds>(index_end - phase_start).count());
            
             auto total_end = high_resolution_clock::now();
             auto total_sec = duration_cast<seconds>(total_end - total_start).count();

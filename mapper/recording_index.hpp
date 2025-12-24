@@ -128,12 +128,24 @@ class RecordingIndex {
 
         ReleaseRecordingIndex
         build_recording_release_indexes(unsigned int artist_credit_id, SQLite::Database &db) {
+            using namespace std::chrono;
+            
+            // Thread-local timing accumulators
+            thread_local long long total_query_us = 0;
+            thread_local long long total_encode_us = 0;
+            thread_local long long total_fuzzy_build_us = 0;
+            thread_local long long total_calls = 0;
+            
+            auto t0 = high_resolution_clock::now();
 
             // Map to track release and recording strings and their indexes 
             map<string, unsigned int>                        release_string_index_map, recording_string_index_map;
             map<string, unsigned int>                        recording_name_to_id_map; // Track first recording_id for each encoded name
             map<string, unsigned int>                        release_name_to_id_map;   // Track first release_id for each encoded name
             map<unsigned int, vector<ReleaseRecordingLink>>  links;
+            
+            int row_count = 0;
+            auto t1 = high_resolution_clock::now();
                 
             try
             {
@@ -142,6 +154,7 @@ class RecordingIndex {
                 query.bind(1, artist_credit_id);
                 query.bind(2, artist_credit_id);
                 while (query.executeStep()) {
+                    row_count++;
                     unsigned int ac_id = query.getColumn(0);
                     unsigned int release_id = query.getColumn(1);
                     unsigned int release_artist_credit_id = query.getColumn(2);
@@ -188,6 +201,9 @@ class RecordingIndex {
                 lb_error("build rec index db exception: %s", e.what());
             }
             
+            auto t2 = high_resolution_clock::now();
+            total_query_us += duration_cast<microseconds>(t2 - t1).count();
+            
             vector<string>       recording_texts(recording_string_index_map.size());
             vector<unsigned int> recording_ids(recording_string_index_map.size());
             // Map from recording_id to its original index (for linking aliases)
@@ -233,6 +249,9 @@ class RecordingIndex {
                     }
                 }
             }
+            
+            auto t3 = high_resolution_clock::now();
+            total_encode_us += duration_cast<microseconds>(t3 - t2).count();
 
             FuzzyIndex *recording_index = new FuzzyIndex();
             try
@@ -261,12 +280,26 @@ class RecordingIndex {
                 lb_error("artist_credit %d: release index build error: '%s'", artist_credit_id, e.what());
             }
             
+            auto t4 = high_resolution_clock::now();
+            total_fuzzy_build_us += duration_cast<microseconds>(t4 - t3).count();
+            
             // Sort each vector of ReleaseRecordingLink by release_id
             for (auto& pair : links) {
                 sort(pair.second.begin(), pair.second.end(), 
                      [](const ReleaseRecordingLink& a, const ReleaseRecordingLink& b) {
                          return a.release_id < b.release_id;
                      });
+            }
+            
+            total_calls++;
+            // Print timing stats every 100 calls
+            if (total_calls % 100 == 0) {
+                lb_log("  [thread timing] calls=%lld query=%.1fms encode=%.1fms fuzzy=%.1fms (avg per call: q=%.2fms e=%.2fms f=%.2fms)",
+                       total_calls,
+                       total_query_us / 1000.0, total_encode_us / 1000.0, total_fuzzy_build_us / 1000.0,
+                       (double)total_query_us / total_calls / 1000.0,
+                       (double)total_encode_us / total_calls / 1000.0,
+                       (double)total_fuzzy_build_us / total_calls / 1000.0);
             }
             
             ReleaseRecordingIndex ret(recording_index, release_index, links);
