@@ -112,7 +112,7 @@ static Transition transitions[] = {
     { state_has_release_argument,       event_no,                      state_lookup_canonical_release },
 
     { state_release_search,             event_has_matches,             state_evaluate_match },
-    { state_release_search,             event_no_matches,              state_select_recording_match },
+    { state_release_search,             event_no_matches,              state_select_artist_match },
 
     { state_select_release_match,       event_meets_threshold,         state_evaluate_match },
     { state_select_release_match,       event_no_matches,              state_select_release_match },
@@ -121,7 +121,7 @@ static Transition transitions[] = {
     { state_lookup_canonical_release,   event_no_matches,              state_fail },
     
     { state_evaluate_match,             event_meets_threshold,         state_success_fetch_metadata },
-    { state_evaluate_match,             event_doesnt_meet_threshold,   state_select_release_match }
+    { state_evaluate_match,             event_doesnt_meet_threshold,   state_select_recording_match }
 };
 
 const int num_transitions = sizeof(transitions) / sizeof(transitions[0]);
@@ -185,7 +185,6 @@ class MappingSearch {
             state_functions[state_stupid_artist_search] = &MappingSearch::do_stupid_artist_search;
             state_functions[state_recording_search] = &MappingSearch::do_recording_search;
             state_functions[state_select_recording_match] = &MappingSearch::do_select_recording_match; 
-            state_functions[state_select_release_match] = &MappingSearch::do_select_release_match; 
             state_functions[state_has_release_argument] = &MappingSearch::do_has_release_argument;
             state_functions[state_release_search] = &MappingSearch::do_release_search;
             state_functions[state_lookup_canonical_release] = &MappingSearch::do_lookup_canonical_release; 
@@ -276,7 +275,7 @@ class MappingSearch {
                 return enter_transition(event_normal_name);
             }
             else {
-                current_artist_credit_name = encode.encode_string_keep_non_word(artist_credit_name); 
+                current_artist_credit_name = encode.encode_string_for_stupid_artists(artist_credit_name); 
                 return enter_transition(event_stupid_name);
             }
         }
@@ -466,25 +465,6 @@ class MappingSearch {
            
             return enter_transition(event_no_matches);
         } 
-
-        bool do_select_release_match() {
-            lb_debug("select release match");
-            // set release_match
-            if (release_match_index < 0)
-                release_match_index = 0;
-            else
-                release_match_index++;
-
-            if (release_match_index < release_matches->size() && (*release_matches)[release_match_index].confidence >= release_threshold) {
-                selected_release_id = (*release_matches)[release_match_index].id;
-                lb_debug("release id selected: %u", selected_release_id);
-                return enter_transition(event_meets_threshold);
-            }
-
-            // no more matches or doesn't meet threshold, same difference
-            return enter_transition(event_doesnt_meet_threshold);
-        }
-                
 
         bool do_lookup_canonical_release() {
 

@@ -275,12 +275,6 @@ public:
         }
         lb_log("Current timestamp: %s", current_timestamp.c_str());
         
-        // Check if timestamps are the same - no changes possible
-        if (last_updated == current_timestamp) {
-            lb_log("Timestamps are identical - no changes since last run");
-            return true;  // Success, but no changes to collect
-        }
-        
         // Clear any previous results
         changed_release_groups.clear();
         changed_artist_credit_ids.clear();

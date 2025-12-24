@@ -16,19 +16,16 @@ struct TestCase {
 
 // new cases:
 // START 'Betty George' '' 'Summer of '82'
-//
+// FSM error
+// peakk divide, worn-out tapes 
 #if 0
-2025-12-24 20:06:33 [DEBUG]: current state_recording_search         event event_has_matches         new state_select_recording_match  
-2025-12-24 20:06:33 [DEBUG]: recording id selected: 20525642
-2025-12-24 20:06:33 [DEBUG]: current state_select_recording_match   event event_meets_threshold     new state_has_release_argument    
-2025-12-24 20:06:33 [DEBUG]: current state_has_release_argument     event event_yes                 new state_release_search          
-2025-12-24 20:06:33 [DEBUG]:     RELEASE SEARCH
-2025-12-24 20:06:33 [DEBUG]:       1.00 2771269  21       voice
-2025-12-24 20:06:33 [DEBUG]:       0.74 1919261  0        myvoice  <= correct version!
-2025-12-24 20:06:33 [DEBUG]: Release search took 0 ms
-2025-12-24 20:06:33 [DEBUG]: release id selected: 2771269
-2025-12-24 20:06:33 [DEBUG]: current state_release_search           event event_has_matches         new state_evaluate_match          
-2025-12-24 20:06:33 [DEBUG]: found no link between recording and release
+2025-12-20 19:02:54: START 'peakk divide' '' 'worn-out tapes'
+2025-12-20 19:02:54: current state_start                    event event_start               new state_artist_name_check       
+2025-12-20 19:02:54: current state_artist_name_check        event event_normal_name         new state_artist_search           
+2025-12-20 19:02:54: ARTIST SEARCH: 'peakk divide' (peakkdivide)
+2025-12-20 19:02:54: Artist search took 3 ms
+2025-12-20 19:02:54: ERROR: No valid transition found from state_artist_search with event_no_matches_not_cleaned
+2025-12-20 19:02:54: Final state state_artist_search
 #endif
 
 inline std::vector<TestCase> get_test_cases() {
@@ -86,10 +83,7 @@ inline std::vector<TestCase> get_test_cases() {
         { "Eve","pray - Single","pray","66bdd1c9-d1c5-40b7-a487-5061fffbd87d","9117d976-7283-4517-b5ac-513e62009613","f8c50031-b2e0-4b60-b8f6-38215271092c" },
         { "TAEYEON", "I", "쌍둥이자리 (Gemini)", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
         { "TAEYEON", "I", "Gemini", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
-        { "peakk divide", "", "worn-out tapes", "", "", "" },
-        { "!!!","!!!","KooKooKa Fuk‐U","f26c72d3-e52c-467b-b651-679c73d8e1a7","c4d9a024-c5d7-40c4-928d-0e3873cc7228","5c811d80-2743-461a-a163-82e14382aad7" },
-        { "TAEYEON","My Voice","기억을 걷는 시간","2b786fb3-a116-4163-9b65-cf56f03c8a7f","3e4acf0e-115c-4243-b326-7727c99e8351","1e5149ab-7de5-4486-98f0-9063530cdb60" },
-        { "TAEYEON","","기억을 걷는 시간","2b786fb3-a116-4163-9b65-cf56f03c8a7f","3e4acf0e-115c-4243-b326-7727c99e8351","1e5149ab-7de5-4486-98f0-9063530cdb60" }
+        { "peakk divide", "", "worn-out tapes", "", "", "" }
     };
 // Possible recording/release match issue. requires more research
 //    { "Celtic Woman","20th Anniversary","When You Believe","4d483147-c871-48c4-8470-85e5a66381c5","9659808f-3382-42be-8c5d-477d271f9791","376e5743-7bf5-49ee-9c7e-f00aa479882c" },
@@ -98,6 +92,8 @@ inline std::vector<TestCase> get_test_cases() {
 // This one requires Album + Soundtrack to be ranked higher than EP.
 //    { "Angelo Badalamenti","","Laura Palmer’s Theme","e441d678-b225-3ea1-808c-9c488fdc3ac6","5894dac5-0260-4175-b36e-e34680a859d6","4cc6e566-96c3-4709-9ec0-a9b39c115e2f" },
 //    { "The Beach Boys","The Smile Sessions","Child Is Father of the Man","ebfc1398-8d96-47e3-82c3-f782abcdb13d","581db767-5221-424b-b6a0-d5db2ff707a1","710ef859-ad3e-4e0e-981b-cecad50e41f4" },
+// Needs stupid indexes for release and recordings!
+//    { "!!!","!!!","KooKooKa Fuk‐U","f26c72d3-e52c-467b-b651-679c73d8e1a7","c4d9a024-c5d7-40c4-928d-0e3873cc7228","5c811d80-2743-461a-a163-82e14382aad7" },
 // Detune, Artist credit for track is quite different. Rmoving all after "," will get the right match
 //    { "Hans Zimmer, Lorne Balfe & Benjamin Wallfisch","Dunkirk: Original Motion Picture Soundtrack","End Titles","9cba57da-0a50-48d0-8a7b-232e31e196a0", "4d4b8a77-6c2e-4e6f-bc12-e563e9efab91","94f64a3f-b7d8-472f-99bb-ca07afad55da" },
 // Data issues

@@ -110,7 +110,8 @@ class RecordingIndex {
                 for (int i = 0; i < PQntuples(res); i++) {
                     unsigned int recording_id = atoi(PQgetvalue(res, i, 0));
                     
-                    string encoded = encode.encode_string_keep_non_word(PQgetvalue(res, i, 1));
+                    // TODO: add this to stupid recording index
+                    string encoded = encode.encode_string(PQgetvalue(res, i, 1));
                     if (encoded.size())
                         recording_aliases[recording_id].insert(encoded);
                 }
@@ -166,8 +167,8 @@ class RecordingIndex {
                     if (artist_credit_id != ac_id && artist_credit_id != release_artist_credit_id)
                         continue;
                     
-                    string encoded_release_name = encode.encode_string_keep_non_word(release_name);
-                    string encoded_recording_name = encode.encode_string_keep_non_word(recording_name);
+                    string encoded_release_name = encode.encode_string(release_name);
+                    string encoded_recording_name = encode.encode_string(recording_name);
                     if (encoded_recording_name.size() == 0)
                         continue;
                     

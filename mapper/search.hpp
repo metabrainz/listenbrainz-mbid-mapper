@@ -179,13 +179,13 @@ class SearchFunctions {
 
             // Improve thresholding
             lb_debug("    RELEASE SEARCH");
-            auto release_name_encoded = encode.encode_string_keep_non_word(release_name); 
+            auto release_name_encoded = encode.encode_string(release_name); 
             if (release_name_encoded.size() == 0) {
                 lb_debug("    release name contains no word characters.");
                 return nullptr;
             }
 
-            vector<IndexResult> *rel_results = release_recording_index->release_index->search(release_name, .7, 'l');
+            vector<IndexResult> *rel_results = release_recording_index->release_index->search(release_name_encoded, .7, 'l');
             if (rel_results != nullptr && rel_results->size()) {
                 // Sort results by confidence (desc), then by id (asc) for deterministic ordering
                 sort(rel_results->begin(), rel_results->end(), [](const IndexResult& a, const IndexResult& b) {
@@ -210,7 +210,7 @@ class SearchFunctions {
                          const string          &recording_name) {
 
             lb_debug("    RECORDING SEARCH");
-            auto recording_name_encoded = encode.encode_string_keep_non_word(recording_name); 
+            auto recording_name_encoded = encode.encode_string(recording_name); 
             if (recording_name_encoded.size() == 0) {
                 lb_debug("    recording name contains no word characters.");
                 return nullptr;
