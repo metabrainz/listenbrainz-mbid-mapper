@@ -168,16 +168,25 @@ int main(int argc, char* argv[]) {
                 vector<MappingRowData> mapping_rows = fetcher.fetch(batch_ids);
                 lb_log("Fetched %zu mapping rows", mapping_rows.size());
                 
-                // Step 3b: Build fuzzy indexes
+                // Step 3b: Update SQLite mapping table first
+                // This must happen BEFORE building indexes so indexes read fresh data
+                lb_log("Updating SQLite mapping table...");
+                if (!updater.update_mapping_only(batch_ids, mapping_rows)) {
+                    lb_error("Batch %zu mapping update failed - stopping", batch_num + 1);
+                    PQfinish(pg_conn);
+                    return 1;
+                }
+                
+                // Step 3c: Build fuzzy indexes (now reading from updated mapping table)
                 lb_log("Building fuzzy indexes...");
                 map<int, string> index_blobs = recording_index.build_indexes_for_update(batch_ids);
                 lb_log("Built %zu index blobs", index_blobs.size());
                 
-                // Step 3c: Update SQLite atomically
-                lb_log("Updating SQLite database...");
-                if (!updater.update(batch_ids, mapping_rows, index_blobs)) {
-                    lb_error("Batch %zu failed - stopping update", batch_num + 1);
-                    lb_error("Previous batches have been committed, but remaining batches skipped");
+                // Step 3d: Update SQLite index_cache
+                lb_log("Updating SQLite index_cache...");
+                if (!updater.update_index_cache_only(batch_ids, index_blobs)) {
+                    lb_error("Batch %zu index_cache update failed - stopping", batch_num + 1);
+                    lb_error("Warning: mapping table updated but index_cache not updated for this batch");
                     PQfinish(pg_conn);
                     return 1;
                 }
