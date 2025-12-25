@@ -111,17 +111,17 @@ static Transition transitions[] = {
     { state_has_release_argument,       event_yes,                     state_release_search },
     { state_has_release_argument,       event_no,                      state_lookup_canonical_release },
 
-    { state_release_search,             event_has_matches,             state_evaluate_match },
+    { state_release_search,             event_has_matches,             state_select_release_match },
     { state_release_search,             event_no_matches,              state_select_artist_match },
 
     { state_select_release_match,       event_meets_threshold,         state_evaluate_match },
-    { state_select_release_match,       event_no_matches,              state_select_release_match },
+    { state_select_release_match,       event_doesnt_meet_threshold,   state_select_recording_match },
 
     { state_lookup_canonical_release,   event_has_matches,             state_evaluate_match },
     { state_lookup_canonical_release,   event_no_matches,              state_fail },
     
     { state_evaluate_match,             event_meets_threshold,         state_success_fetch_metadata },
-    { state_evaluate_match,             event_doesnt_meet_threshold,   state_select_recording_match }
+    { state_evaluate_match,             event_doesnt_meet_threshold,   state_select_release_match }
 };
 
 const int num_transitions = sizeof(transitions) / sizeof(transitions[0]);
@@ -187,6 +187,7 @@ class MappingSearch {
             state_functions[state_select_recording_match] = &MappingSearch::do_select_recording_match; 
             state_functions[state_has_release_argument] = &MappingSearch::do_has_release_argument;
             state_functions[state_release_search] = &MappingSearch::do_release_search;
+            state_functions[state_select_release_match] = &MappingSearch::do_select_release_match;
             state_functions[state_lookup_canonical_release] = &MappingSearch::do_lookup_canonical_release; 
             state_functions[state_evaluate_match] = &MappingSearch::do_evaluate_match;
             state_functions[state_fail] = &MappingSearch::do_fail;
@@ -424,6 +425,10 @@ class MappingSearch {
             if (recording_match_index < recording_matches->size() && (*recording_matches)[recording_match_index].confidence >= recording_threshold) {
                 selected_recording_id = (*recording_matches)[recording_match_index].id;
                 lb_debug("recording id selected: %u", selected_recording_id);
+                
+                // Reset release_match_index so we retry all releases for this new recording
+                release_match_index = -1;
+                
                 return enter_transition(event_meets_threshold);
             }
 
@@ -440,7 +445,7 @@ class MappingSearch {
         
         bool do_release_search() {
             // check for release_recording_index, load if nullptr
-            // set release_matches
+            // Only search for releases if we haven't already done so
             
             if (release_recording_index == nullptr) {
                 release_recording_index = search_functions->load_recording_release_index(selected_artist_credit_id);
@@ -450,21 +455,55 @@ class MappingSearch {
                 }
             }
 
-            delete release_matches;
-            auto start = std::chrono::high_resolution_clock::now();
-            release_matches = search_functions->release_search(release_recording_index, release_name); 
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            lb_debug("Release search took %ld ms", duration.count());
+            // Only perform the search if we don't already have release matches
+            if (release_matches == nullptr) {
+                auto start = std::chrono::high_resolution_clock::now();
+                release_matches = search_functions->release_search(release_recording_index, release_name); 
+                auto end = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+                lb_debug("Release search took %ld ms", duration.count());
+            }
+            
             if (release_matches && release_matches->size() > 0) {
-                selected_release_id = (*release_matches)[0].id;
-                lb_debug("release id selected: %u", selected_release_id);
-                release_match_index = 0;
+                release_match_index = -1;
                 return enter_transition(event_has_matches);
             }
            
             return enter_transition(event_no_matches);
         } 
+
+        bool do_select_release_match() {
+            // set release_match, skipping releases that don't have a link to the current recording
+            if (release_match_index < 0)
+                release_match_index = 0;
+            else
+                release_match_index++;
+
+            // Loop through remaining releases looking for one with a valid link to the recording
+            while (release_match_index < release_matches->size() && 
+                   (*release_matches)[release_match_index].confidence >= release_threshold) {
+                
+                // Check if this release has a link to the current recording
+                delete search_match;
+                search_match = search_functions->find_match(selected_artist_credit_id,
+                                                            release_recording_index, 
+                                                            &(*release_matches)[release_match_index],
+                                                            &(*recording_matches)[recording_match_index]);
+                
+                if (search_match) {
+                    // Found a release with a valid link
+                    selected_release_id = (*release_matches)[release_match_index].id;
+                    lb_debug("release id selected: %u", selected_release_id);
+                    return enter_transition(event_meets_threshold);
+                }
+                
+                // No link found, try next release
+                release_match_index++;
+            }
+
+            // no more matches or doesn't meet threshold, same difference
+            return enter_transition(event_doesnt_meet_threshold);
+        }
 
         bool do_lookup_canonical_release() {
 
@@ -485,12 +524,15 @@ class MappingSearch {
         }
         
         bool do_evaluate_match() {
-            // select the right link between recording and release
-            delete search_match;
-            search_match = search_functions->find_match(selected_artist_credit_id,
-                                                        release_recording_index, 
-                                                        &(*release_matches)[release_match_index],
-                                                        &(*recording_matches)[recording_match_index]);
+            // If coming from do_select_release_match, search_match is already set
+            // If coming from do_lookup_canonical_release, we need to find the match
+            if (!search_match) {
+                search_match = search_functions->find_match(selected_artist_credit_id,
+                                                            release_recording_index, 
+                                                            &(*release_matches)[release_match_index],
+                                                            &(*recording_matches)[recording_match_index]);
+            }
+            
             if (search_match)
                 return enter_transition(event_meets_threshold);
             else

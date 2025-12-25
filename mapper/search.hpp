@@ -179,7 +179,7 @@ class SearchFunctions {
 
             // Improve thresholding
             lb_debug("    RELEASE SEARCH");
-            auto release_name_encoded = encode.encode_string_keep_non_word(release_name); 
+            auto release_name_encoded = encode.encode_string(release_name); 
             if (release_name_encoded.size() == 0) {
                 lb_debug("    release name contains no word characters.");
                 return nullptr;
@@ -210,7 +210,7 @@ class SearchFunctions {
                          const string          &recording_name) {
 
             lb_debug("    RECORDING SEARCH");
-            auto recording_name_encoded = encode.encode_string_keep_non_word(recording_name); 
+            auto recording_name_encoded = encode.encode_string(recording_name); 
             if (recording_name_encoded.size() == 0) {
                 lb_debug("    recording name contains no word characters.");
                 return nullptr;
@@ -248,7 +248,7 @@ class SearchFunctions {
                     
                     // Different matching strategy based on source:
                     // 'r' = canonical release lookup (match by release_id)
-                    // 'l' = fuzzy release search (match by release_index)
+                    // 'l' = fuzzy release search (match by release_index, pick lowest rank)
                     if (rel_result->source == 'r') {
                         // Canonical lookup: use binary search on release_id (sorted)
                         auto it = lower_bound(links_vector.begin(), links_vector.end(), rel_result->id,
@@ -261,13 +261,18 @@ class SearchFunctions {
                             return new SearchMatch(artist_credit_id, it->release_id, it->recording_id, score);
                         }
                     } else {
-                        // Fuzzy search: linear search by release_index (not sorted by this field)
-                        // Not ideal: consider improving this.
+                        // Fuzzy search: find all links matching release_index, pick the one with lowest rank
+                        const ReleaseRecordingLink* best_link = nullptr;
                         for (const auto& link : links_vector) {
                             if (link.release_index == rel_result->result_index) {
-                                float score = (rec_result->confidence + rel_result->confidence) / 2.0;
-                                return new SearchMatch(artist_credit_id, link.release_id, link.recording_id, score);
+                                if (best_link == nullptr || link.rank < best_link->rank) {
+                                    best_link = &link;
+                                }
                             }
+                        }
+                        if (best_link != nullptr) {
+                            float score = (rec_result->confidence + rel_result->confidence) / 2.0;
+                            return new SearchMatch(artist_credit_id, best_link->release_id, best_link->recording_id, score);
                         }
                     }
                     break; // Found the recording, no need to continue searching
