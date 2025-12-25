@@ -475,7 +475,7 @@ class ArtistIndex {
             for(unsigned int i = 0; i < single_artist_credit_ids.size(); i++) {
                 auto ret = encode.encode_string(single_artist_credit_texts[i]);
                 if (ret.size() == 0) {
-                    auto stupid = encode.encode_string_for_stupid_artists(single_artist_credit_texts[i]);
+                    auto stupid = encode.encode_string_keep_non_word(single_artist_credit_texts[i]);
                     if (stupid.size()) {
                         stupid_artist_data.insert({ single_artist_credit_ids[i], stupid }); 
                         continue;

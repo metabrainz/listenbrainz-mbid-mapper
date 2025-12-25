@@ -101,7 +101,7 @@ TEST_CASE("basic lookup tests") {
 }
 
 int main(int argc, char* argv[]) {
-    init_logging();
+    init_logging(LOG_DEBUG);
     load_env_file();  // Load .env file, env vars take precedence
     
     // Initialize nmslib once in main thread before any FuzzyIndex is created

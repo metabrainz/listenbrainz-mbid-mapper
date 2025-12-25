@@ -84,6 +84,9 @@ inline std::vector<TestCase> get_test_cases() {
         { "TAEYEON", "I", "쌍둥이자리 (Gemini)", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
         { "TAEYEON", "I", "Gemini", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
         { "peakk divide", "", "worn-out tapes", "", "", "" }
+//        { "!!!","!!!","KooKooKa Fuk‐U","f26c72d3-e52c-467b-b651-679c73d8e1a7","c4d9a024-c5d7-40c4-928d-0e3873cc7228","5c811d80-2743-461a-a163-82e14382aad7" },
+//        { "electric company", "omokase", "+++", "a2eddbfc-1fbf-4329-9baf-07076600d7a0", "68040e4d-ec5a-4844-a6d4-b97cd0fa83b2", "3a2ad8b5-4e7f-469d-b1f4-f133ee50eca4"},
+//        { "electric company", "omakase", "+++", "a2eddbfc-1fbf-4329-9baf-07076600d7a0", "68040e4d-ec5a-4844-a6d4-b97cd0fa83b2", "3a2ad8b5-4e7f-469d-b1f4-f133ee50eca4"}
     };
 // Possible recording/release match issue. requires more research
 //    { "Celtic Woman","20th Anniversary","When You Believe","4d483147-c871-48c4-8470-85e5a66381c5","9659808f-3382-42be-8c5d-477d271f9791","376e5743-7bf5-49ee-9c7e-f00aa479882c" },

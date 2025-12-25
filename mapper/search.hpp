@@ -179,7 +179,7 @@ class SearchFunctions {
 
             // Improve thresholding
             lb_debug("    RELEASE SEARCH");
-            auto release_name_encoded = encode.encode_string(release_name); 
+            auto release_name_encoded = encode.encode_string_keep_non_word(release_name); 
             if (release_name_encoded.size() == 0) {
                 lb_debug("    release name contains no word characters.");
                 return nullptr;
@@ -210,7 +210,7 @@ class SearchFunctions {
                          const string          &recording_name) {
 
             lb_debug("    RECORDING SEARCH");
-            auto recording_name_encoded = encode.encode_string(recording_name); 
+            auto recording_name_encoded = encode.encode_string_keep_non_word(recording_name); 
             if (recording_name_encoded.size() == 0) {
                 lb_debug("    recording name contains no word characters.");
                 return nullptr;

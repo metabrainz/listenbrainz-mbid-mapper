@@ -275,7 +275,7 @@ class MappingSearch {
                 return enter_transition(event_normal_name);
             }
             else {
-                current_artist_credit_name = encode.encode_string_for_stupid_artists(artist_credit_name); 
+                current_artist_credit_name = encode.encode_string_keep_non_word(artist_credit_name); 
                 return enter_transition(event_stupid_name);
             }
         }

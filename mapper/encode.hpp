@@ -69,7 +69,7 @@ class EncodeSearchData {
         }
 
         string
-        encode_string_for_stupid_artists(const string &text) {
+        encode_string_keep_non_word(const string &text) {
             //Remove spaces, convert non-ascii characters to some romanized equivalent, lower case, return
             if (text.empty()) {
                 string a;
