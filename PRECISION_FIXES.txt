@@ -1,0 +1,210 @@
+================================================================================
+FLOATING POINT PRECISION FIXES FOR NMSLIB SIMPLE_INVERTED_INDEX
+================================================================================
+
+Date: December 25, 2025
+Affected Component: nmslib similarity_search (simple_inverted_index method)
+Related File: similarity_search/src/method/simple_inverted_index.cc
+
+--------------------------------------------------------------------------------
+PROBLEM SUMMARY
+--------------------------------------------------------------------------------
+
+When using nmslib's simple_inverted_index method with the negdotprod_sparse_fast
+space for K-NN queries, release builds (-O3 optimization) would return fewer
+results than debug builds (-O0) for queries with many equal-score matches.
+
+Specifically, when searching for text that matches multiple index entries with
+identical TF-IDF vectors (e.g., searching for "pinkfloyd" which matches 19
+different artist entries with the exact same encoded text), the release build
+would only return 10 results while the debug build correctly returned all 19.
+
+--------------------------------------------------------------------------------
+ROOT CAUSE ANALYSIS
+--------------------------------------------------------------------------------
+
+The issue stems from floating point precision differences between optimized
+and non-optimized builds:
+
+1. COMPILER OPTIMIZATION EFFECTS ON FLOATING POINT
+
+   With -O3 optimization, the compiler may:
+   - Reorder floating point operations
+   - Use fused multiply-add (FMA) instructions
+   - Apply other transformations that are mathematically equivalent but
+     produce slightly different binary floating point results
+
+   This causes dot products that should be exactly equal (e.g., 1.0 for
+   identical normalized vectors) to compute to slightly different values
+   (e.g., 0.9999999404 vs 1.0000000000).
+
+2. EXACT EQUALITY COMPARISON IN TIE HANDLING
+
+   In simple_inverted_index.cc Search() function (around line 117-120):
+
+   ```cpp
+   if (tmpResQueue.size() < K || tmpResQueue.top_key() == negAccum)
+       tmpResQueue.push(negAccum, -minDocIdNeg);
+   else if (tmpResQueue.top_key() > negAccum)
+       tmpResQueue.replace_top(negAccum, -minDocIdNeg);
+   ```
+
+   The condition `tmpResQueue.top_key() == negAccum` uses EXACT floating point
+   equality to detect ties (documents with equal scores). When optimization
+   causes scores to differ by tiny amounts (1e-7 or less), this comparison
+   fails and equal-score documents are incorrectly rejected.
+
+3. ADDITIONAL ISSUE: -Ofast FLAG
+
+   The nmslib CMakeLists.txt uses -Ofast for release builds, which includes
+   -ffast-math. This flag allows even more aggressive floating point
+   optimizations that can break IEEE 754 compliance and exacerbate precision
+   issues.
+
+--------------------------------------------------------------------------------
+FIXES APPLIED
+--------------------------------------------------------------------------------
+
+FIX 1: EPSILON COMPARISON FOR TIE DETECTION
+File: similarity_search/src/method/simple_inverted_index.cc
+
+Changed from exact equality to epsilon-based comparison:
+
+BEFORE:
+```cpp
+if (tmpResQueue.size() < K || tmpResQueue.top_key() == negAccum)
+    tmpResQueue.push(negAccum, -minDocIdNeg);
+```
+
+AFTER:
+```cpp
+#include <cmath>  // Added at top of file
+
+// In Search() function:
+constexpr dist_t epsilon = 1e-7f;  // Small epsilon for float comparison
+if (tmpResQueue.size() < K || std::abs(tmpResQueue.top_key() - negAccum) < epsilon)
+    tmpResQueue.push(negAccum, -minDocIdNeg);
+```
+
+This ensures that scores differing by less than 1e-7 are treated as equal,
+which correctly handles the floating point precision variations introduced
+by compiler optimizations.
+
+
+FIX 2: REMOVE -Ofast FROM CMAKE BUILD FLAGS
+File: similarity_search/CMakeLists.txt
+
+Changed release build flags from -Ofast to -O3:
+
+BEFORE (line 50):
+```cmake
+set (CMAKE_CXX_FLAGS_RELEASE "${WARN_FLAGS} -Ofast -lm -DNDEBUG ...")
+```
+
+AFTER:
+```cmake
+# Note: Changed -Ofast to -O3 to avoid -ffast-math which can cause
+# incorrect floating point behavior
+set (CMAKE_CXX_FLAGS_RELEASE "${WARN_FLAGS} -O3 -lm -DNDEBUG ...")
+```
+
+The same change should be applied for Intel compiler flags (line 55-56).
+
+--------------------------------------------------------------------------------
+WHY THESE FIXES ARE CORRECT
+--------------------------------------------------------------------------------
+
+1. EPSILON VALUE SELECTION (1e-7f)
+
+   For single-precision floats (float/dist_t), the machine epsilon is
+   approximately 1.19e-7. Using 1e-7 as our comparison epsilon is appropriate
+   because:
+   
+   - It's close to machine epsilon, catching only true precision errors
+   - It's small enough to not conflate genuinely different scores
+   - Dot products of TF-IDF vectors typically range from 0 to 1, so this
+     epsilon represents a ~0.00001% tolerance
+
+2. NO SEMANTIC CHANGE TO ALGORITHM
+
+   The inverted index search is already designed to handle ties - the
+   existing code comment even notes:
+   
+   "DAVID: THIS CONSTRUCTION IS WRONG. DUE TO THE FIRST CONDITION, THERE
+   MIGHT BE MORE THAN K DOCUMENTS IN THE RESULT"
+   
+   This indicates that returning more than K results for ties is intentional
+   behavior. The epsilon fix simply makes this tie detection robust against
+   floating point precision variations.
+
+3. REMOVING -Ofast IS SAFE
+
+   -Ofast includes -ffast-math which:
+   - Assumes no NaN or Inf values
+   - Allows reassociation of FP operations
+   - Can change results of floating point comparisons
+   
+   For a similarity search library where precise distance comparisons are
+   critical, -ffast-math is inappropriate. Using -O3 instead provides
+   excellent optimization while maintaining IEEE 754 compliance.
+
+--------------------------------------------------------------------------------
+TESTING VERIFICATION
+--------------------------------------------------------------------------------
+
+Test case: Search for "pink floyd" (encoded as "pinkfloyd") which has 19
+matching entries in the artist index, all with identical TF-IDF vectors.
+
+BEFORE FIX (release build):
+- Returned only 10 results
+- Artist credit ID 191 (the canonical "Pink Floyd") was often missing
+
+AFTER FIX (release build):
+- Returns all 19 matching entries
+- Results match debug build exactly
+- Artist credit ID 191 is correctly included
+
+--------------------------------------------------------------------------------
+RECOMMENDED UPSTREAM CHANGES
+--------------------------------------------------------------------------------
+
+1. In similarity_search/src/method/simple_inverted_index.cc:
+   - Add #include <cmath>
+   - Change tie detection to use epsilon comparison (as shown above)
+
+2. In similarity_search/CMakeLists.txt:
+   - Replace -Ofast with -O3 in CMAKE_CXX_FLAGS_RELEASE for all compilers
+   - Add comment explaining why -ffast-math is avoided
+
+3. Consider adding a similar epsilon comparison in other methods that
+   perform floating point equality checks for tie handling.
+
+--------------------------------------------------------------------------------
+RELATED NOTES
+--------------------------------------------------------------------------------
+
+The downstream application (listenbrainz-mbid-mapper) also had a related issue
+where it checked for "perfect matches" using exact equality:
+
+```cpp
+if (dist < 1.0) {
+    found_non_perfect = true;
+}
+```
+
+This was also affected by precision issues where perfect matches computed to
+0.9999999 instead of 1.0. The fix was to use epsilon tolerance:
+
+```cpp
+constexpr float PERFECT_MATCH_EPSILON = 1e-6f;
+if (dist < (1.0f - PERFECT_MATCH_EPSILON)) {
+    found_non_perfect = true;
+}
+```
+
+This is an application-level fix, not an nmslib issue, but illustrates that
+consumers of nmslib should be aware that distance values may have small
+floating point precision variations and should not use exact equality
+comparisons.
+
+================================================================================

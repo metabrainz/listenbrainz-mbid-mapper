@@ -134,6 +134,10 @@ class FuzzyIndex {
             unsigned k = NUM_FUZZY_SEARCH_RESULTS;
             bool has_long = false;
             const unsigned max_k = 1000; // Reasonable upper limit to prevent infinite growth
+            
+            // Epsilon for floating point comparison - accounts for FP precision issues
+            // where perfect matches may compute to 0.9999999 instead of exactly 1.0
+            constexpr float PERFECT_MATCH_EPSILON = 1e-6f;
 
             // Keep searching with increasing k until we get some non-perfect matches
             while (k <= max_k) {
@@ -152,8 +156,9 @@ class FuzzyIndex {
                             has_long = true;
                         results->push_back(IndexResult(index_ids[queue->TopObject()->id()], queue->TopObject()->id(), dist, source));
                         
-                        // Check if this result has confidence < 1.0
-                        if (dist < 1.0) {
+                        // Check if this result has confidence < 1.0 (with epsilon tolerance)
+                        // This prevents FP precision issues from causing early termination
+                        if (dist < (1.0f - PERFECT_MATCH_EPSILON)) {
                             found_non_perfect = true;
                         }
                     }
