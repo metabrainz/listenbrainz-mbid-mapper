@@ -292,7 +292,7 @@ class RecordingIndex {
             auto t3 = high_resolution_clock::now();
             total_encode_us += duration_cast<microseconds>(t3 - t2).count();
 
-            FuzzyIndex *recording_index = new FuzzyIndex();
+            FuzzyIndex *recording_index = new FuzzyIndex(true);
             if (recording_texts.size() > 0) {
                 try
                 {
@@ -311,7 +311,7 @@ class RecordingIndex {
                 // Use the actual release_id from the database, not the index
                 release_ids[it.second] = release_name_to_id_map[it.first];
             }
-            FuzzyIndex *release_index = new FuzzyIndex();
+            FuzzyIndex *release_index = new FuzzyIndex(true);
             if (release_texts.size() > 0) {
                 try
                 {
@@ -342,7 +342,7 @@ class RecordingIndex {
             // Build stupid recording index only if we have data
             std::unique_ptr<FuzzyIndex> stupid_recording_index;
             if (stupid_recording_texts.size() > 0) {
-                stupid_recording_index = std::make_unique<FuzzyIndex>();
+                stupid_recording_index = std::make_unique<FuzzyIndex>(true);
                 try
                 {
                     stupid_recording_index->build(stupid_recording_ids, stupid_recording_texts);
@@ -357,7 +357,7 @@ class RecordingIndex {
             // Build stupid release index only if we have data
             std::unique_ptr<FuzzyIndex> stupid_release_index;
             if (stupid_release_texts.size() > 0) {
-                stupid_release_index = std::make_unique<FuzzyIndex>();
+                stupid_release_index = std::make_unique<FuzzyIndex>(true);
                 try
                 {
                     stupid_release_index->build(stupid_release_ids, stupid_release_texts);
@@ -404,8 +404,8 @@ class RecordingIndex {
         // Load with external DB connection (for connection reuse in server)
         ReleaseRecordingIndex *
         load(const int artist_credit_id, SQLite::Database &db) {
-            FuzzyIndex                   *recording_index = new FuzzyIndex();
-            FuzzyIndex                   *release_index = new FuzzyIndex();
+            FuzzyIndex                   *recording_index = new FuzzyIndex(true);
+            FuzzyIndex                   *release_index = new FuzzyIndex(true);
             std::unique_ptr<FuzzyIndex>  stupid_recording_index;
             std::unique_ptr<FuzzyIndex>  stupid_release_index;
             map<unsigned int, vector<ReleaseRecordingLink>>  links;
