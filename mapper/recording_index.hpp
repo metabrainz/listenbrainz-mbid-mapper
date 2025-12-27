@@ -294,7 +294,7 @@ class RecordingIndex {
             auto t3 = high_resolution_clock::now();
             total_encode_us += duration_cast<microseconds>(t3 - t2).count();
 
-            FuzzyIndex *recording_index = new FuzzyIndex(true, recording_ngrams);
+            FuzzyIndex *recording_index = new FuzzyIndex(recording_ngrams);
             if (recording_texts.size() > 0) {
                 try
                 {
@@ -313,7 +313,7 @@ class RecordingIndex {
                 // Use the actual release_id from the database, not the index
                 release_ids[it.second] = release_name_to_id_map[it.first];
             }
-            FuzzyIndex *release_index = new FuzzyIndex(true, release_ngrams);
+            FuzzyIndex *release_index = new FuzzyIndex(release_ngrams);
             if (release_texts.size() > 0) {
                 try
                 {
