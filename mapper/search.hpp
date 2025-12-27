@@ -18,7 +18,7 @@
 
 // TODO: Create dynamic thresholds based on length. Shorter artists will need more checks.
 const float artist_threshold = .7;
-const float release_threshold = .7;
+const float release_threshold = .6;
 const float recording_threshold = .7;
 
 const char *fetch_metadata_query = 
@@ -181,8 +181,36 @@ class SearchFunctions {
             lb_debug("    RELEASE SEARCH");
             auto release_name_encoded = encode.encode_string(release_name); 
             if (release_name_encoded.size() == 0) {
-                lb_debug("    release name contains no word characters.");
-                return nullptr;
+                lb_debug("    release name contains no word characters, trying stupid index.");
+                release_name_encoded = encode.encode_string_keep_non_word(release_name);
+                if (release_name_encoded.size() == 0) {
+                    lb_debug("    release name also contains no non-word characters.");
+                    return nullptr;
+                }
+                
+                // Use stupid release index if it exists
+                if (!release_recording_index->stupid_release_index) {
+                    lb_debug("    stupid release index not available.");
+                    return nullptr;
+                }
+                
+                vector<IndexResult> *rel_results = release_recording_index->stupid_release_index->search(release_name_encoded, .7, 't');
+                if (rel_results != nullptr && rel_results->size()) {
+                    sort(rel_results->begin(), rel_results->end(), [](const IndexResult& a, const IndexResult& b) {
+                        if (a.confidence != b.confidence)
+                            return a.confidence > b.confidence;
+                        return a.id < b.id;
+                    });
+                    
+                    for(auto &result : *rel_results) {
+                        string text = release_recording_index->stupid_release_index->get_index_text(result.result_index);
+                        lb_debug("      %.2f %-8u %-8d %s", result.confidence, result.id, result.result_index, text.c_str());
+                    }     
+                }
+                else    
+                    lb_debug("    no release matches in stupid index, ignoring release.");
+
+                return rel_results;
             }
 
             vector<IndexResult> *rel_results = release_recording_index->release_index->search(release_name_encoded, .7, 'l');
@@ -212,8 +240,36 @@ class SearchFunctions {
             lb_debug("    RECORDING SEARCH");
             auto recording_name_encoded = encode.encode_string(recording_name); 
             if (recording_name_encoded.size() == 0) {
-                lb_debug("    recording name contains no word characters.");
-                return nullptr;
+                lb_debug("    recording name contains no word characters, trying stupid index.");
+                recording_name_encoded = encode.encode_string_keep_non_word(recording_name);
+                if (recording_name_encoded.size() == 0) {
+                    lb_debug("    recording name also contains no non-word characters.");
+                    return nullptr;
+                }
+                
+                // Use stupid recording index if it exists
+                if (!release_recording_index->stupid_recording_index) {
+                    lb_debug("    stupid recording index not available.");
+                    return nullptr;
+                }
+                
+                vector<IndexResult> *rec_results = release_recording_index->stupid_recording_index->search(recording_name_encoded, .7, 's');
+                if (rec_results != nullptr && rec_results->size()) {
+                    sort(rec_results->begin(), rec_results->end(), [](const IndexResult& a, const IndexResult& b) {
+                        if (a.confidence != b.confidence)
+                            return a.confidence > b.confidence;
+                        return a.id < b.id;
+                    });
+                    
+                    for(auto &result : *rec_results) {
+                        string text = release_recording_index->stupid_recording_index->get_index_text(result.result_index);
+                        lb_debug("      %.2f %-8u %s", result.confidence, result.id, text.c_str());
+                    }
+                } else {
+                    lb_debug("      No recording results in stupid index.");
+                }
+                
+                return rec_results;
             }
 
             vector<IndexResult> *rec_results = release_recording_index->recording_index->search(recording_name_encoded, .7, 'c');
@@ -242,15 +298,31 @@ class SearchFunctions {
                    IndexResult           *rel_result,
                    IndexResult           *rec_result) {
 
+            // Translate stupid index result_index to normal index
+            unsigned int recording_lookup_index = rec_result->result_index;
+            if (rec_result->source == 's') {
+                // Result came from stupid_recording_index - need to translate
+                unsigned int recording_id = release_recording_index->stupid_recording_index->index_ids[rec_result->result_index];
+                auto it = find(release_recording_index->recording_index->index_ids.begin(),
+                              release_recording_index->recording_index->index_ids.end(),
+                              recording_id);
+                if (it == release_recording_index->recording_index->index_ids.end()) {
+                    lb_debug("recording from stupid index not found in normal index");
+                    return nullptr;
+                }
+                recording_lookup_index = distance(release_recording_index->recording_index->index_ids.begin(), it);
+            }
+
             for(const auto& pair : release_recording_index->links) {
-                if (pair.first == rec_result->result_index) {
+                if (pair.first == recording_lookup_index) {
                     const auto& links_vector = pair.second;
                     
                     // Different matching strategy based on source:
                     // 'r' = canonical release lookup (match by release_id)
                     // 'l' = fuzzy release search (match by release_index, pick lowest rank)
-                    if (rel_result->source == 'r') {
-                        // Canonical lookup: use binary search on release_id (sorted)
+                    // 't' = stupid release index (match by release_id, as stupid releases use dummy release_index)
+                    if (rel_result->source == 'r' || rel_result->source == 't') {
+                        // Canonical or stupid lookup: use binary search on release_id (sorted)
                         auto it = lower_bound(links_vector.begin(), links_vector.end(), rel_result->id,
                                             [](const ReleaseRecordingLink& link, unsigned int target_release_id) {
                                                 return link.release_id < target_release_id;
@@ -262,9 +334,24 @@ class SearchFunctions {
                         }
                     } else {
                         // Fuzzy search: find all links matching release_index, pick the one with lowest rank
+                        // Translate stupid release index if needed
+                        unsigned int release_lookup_index = rel_result->result_index;
+                        if (rel_result->source == 't') {
+                            // Result came from stupid_release_index - need to translate
+                            unsigned int release_id = release_recording_index->stupid_release_index->index_ids[rel_result->result_index];
+                            auto it = find(release_recording_index->release_index->index_ids.begin(),
+                                          release_recording_index->release_index->index_ids.end(),
+                                          release_id);
+                            if (it == release_recording_index->release_index->index_ids.end()) {
+                                lb_debug("release from stupid index not found in normal index");
+                                return nullptr;
+                            }
+                            release_lookup_index = distance(release_recording_index->release_index->index_ids.begin(), it);
+                        }
+                        
                         const ReleaseRecordingLink* best_link = nullptr;
                         for (const auto& link : links_vector) {
-                            if (link.release_index == rel_result->result_index) {
+                            if (link.release_index == release_lookup_index) {
                                 if (best_link == nullptr || link.rank < best_link->rank) {
                                     best_link = &link;
                                 }

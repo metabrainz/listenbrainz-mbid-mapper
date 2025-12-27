@@ -25,6 +25,7 @@ using namespace std;
 ReleaseRecordingIndex::~ReleaseRecordingIndex() {
     delete recording_index;
     delete release_index;
+    // stupid_recording_index and stupid_release_index are unique_ptr and auto-deleted
 }
 
 // Ratio to estimate in-memory size from on-disk (blob) size.
@@ -126,7 +127,7 @@ class RecordingIndex {
             }
         }
 
-        ReleaseRecordingIndex
+        ReleaseRecordingIndex *
         build_recording_release_indexes(unsigned int artist_credit_id, SQLite::Database &db) {
             using namespace std::chrono;
             
@@ -143,6 +144,10 @@ class RecordingIndex {
             map<string, unsigned int>                        recording_name_to_id_map; // Track first recording_id for each encoded name
             map<string, unsigned int>                        release_name_to_id_map;   // Track first release_id for each encoded name
             map<unsigned int, vector<ReleaseRecordingLink>>  links;
+            
+            // Data for stupid indexes (items that encode to empty strings)
+            map<string, unsigned int>                        stupid_recording_string_index_map;
+            map<string, unsigned int>                        stupid_release_string_index_map;
             
             int row_count = 0;
             auto t1 = high_resolution_clock::now();
@@ -169,18 +174,52 @@ class RecordingIndex {
                     
                     string encoded_release_name = encode.encode_string(release_name);
                     string encoded_recording_name = encode.encode_string(recording_name);
-                    if (encoded_recording_name.size() == 0)
-                        continue;
+                    
+                    // Handle recording that encodes to empty - add to stupid index but still create links
+                    bool recording_is_stupid = false;
+                    if (encoded_recording_name.size() == 0) {
+                        // Try stupid encoding
+                        string stupid_encoded = encode.encode_string_keep_non_word(recording_name);
+                        if (stupid_encoded.size() > 0) {
+                            if (stupid_recording_string_index_map.find(stupid_encoded) == stupid_recording_string_index_map.end()) {
+                                stupid_recording_string_index_map[stupid_encoded] = recording_id;
+                            }
+                            // Use the stupid encoding for the normal index too, so we can create links
+                            encoded_recording_name = stupid_encoded;
+                            recording_is_stupid = true;
+                        } else {
+                            continue;  // No encoding possible, skip this recording
+                        }
+                    }
+                    
+                    // Handle release that encodes to empty - add to stupid index but still create links
+                    bool release_is_stupid = false;
+                    if (encoded_release_name.size() == 0) {
+                        // Try stupid encoding
+                        string stupid_encoded = encode.encode_string_keep_non_word(release_name);
+                        if (stupid_encoded.size() > 0) {
+                            if (stupid_release_string_index_map.find(stupid_encoded) == stupid_release_string_index_map.end()) {
+                                stupid_release_string_index_map[stupid_encoded] = release_id;
+                            }
+                        }
+                        release_is_stupid = true;
+                        // Don't continue - we still need to create links, but skip adding to normal release index
+                    }
                     
                     unsigned int release_index;
-                    try {
-                        release_index = release_string_index_map.at(encoded_release_name);
-                    } catch (const std::out_of_range& e) {
-                        release_index = release_string_index_map.size();
-                        release_string_index_map[encoded_release_name] = release_index;
-                        // Store the first release_id we encounter for this encoded name
-                        release_name_to_id_map[encoded_release_name] = release_id;
-                    } 
+                    if (!release_is_stupid) {
+                        try {
+                            release_index = release_string_index_map.at(encoded_release_name);
+                        } catch (const std::out_of_range& e) {
+                            release_index = release_string_index_map.size();
+                            release_string_index_map[encoded_release_name] = release_index;
+                            // Store the first release_id we encounter for this encoded name
+                            release_name_to_id_map[encoded_release_name] = release_id;
+                        }
+                    } else {
+                        // For stupid releases, use a dummy index value (we won't use it for searching)
+                        release_index = 0;
+                    }
 
                     unsigned int recording_index;
                     try {
@@ -254,13 +293,15 @@ class RecordingIndex {
             total_encode_us += duration_cast<microseconds>(t3 - t2).count();
 
             FuzzyIndex *recording_index = new FuzzyIndex();
-            try
-            {
-                recording_index->build(recording_ids, recording_texts);
-            }
-            catch(const std::exception& e)
-            {
-                lb_error("artist_credit %d: Recording index build error: '%s'", artist_credit_id, e.what());
+            if (recording_texts.size() > 0) {
+                try
+                {
+                    recording_index->build(recording_ids, recording_texts);
+                }
+                catch(const std::exception& e)
+                {
+                    lb_error("artist_credit %d: Recording index build error: '%s'", artist_credit_id, e.what());
+                }
             }
 
             vector<string>       release_texts(release_string_index_map.size());
@@ -271,13 +312,61 @@ class RecordingIndex {
                 release_ids[it.second] = release_name_to_id_map[it.first];
             }
             FuzzyIndex *release_index = new FuzzyIndex();
-            try
-            {
-                release_index->build(release_ids, release_texts);
+            if (release_texts.size() > 0) {
+                try
+                {
+                    release_index->build(release_ids, release_texts);
+                }
+                catch(const std::exception& e)
+                {
+                    lb_error("artist_credit %d: release index build error: '%s'", artist_credit_id, e.what());
+                }
             }
-            catch(const std::exception& e)
-            {
-                lb_error("artist_credit %d: release index build error: '%s'", artist_credit_id, e.what());
+            
+            // Build stupid indexes from the collected data
+            vector<string>       stupid_recording_texts;
+            vector<unsigned int> stupid_recording_ids;
+            vector<string>       stupid_release_texts;
+            vector<unsigned int> stupid_release_ids;
+            
+            for (auto &it : stupid_recording_string_index_map) {
+                stupid_recording_texts.push_back(it.first);
+                stupid_recording_ids.push_back(it.second);
+            }
+            
+            for (auto &it : stupid_release_string_index_map) {
+                stupid_release_texts.push_back(it.first);
+                stupid_release_ids.push_back(it.second);
+            }
+            
+            // Build stupid recording index only if we have data
+            std::unique_ptr<FuzzyIndex> stupid_recording_index;
+            if (stupid_recording_texts.size() > 0) {
+                stupid_recording_index = std::make_unique<FuzzyIndex>();
+                try
+                {
+                    stupid_recording_index->build(stupid_recording_ids, stupid_recording_texts);
+                }
+                catch(const std::exception& e)
+                {
+                    lb_error("artist_credit %d: Stupid recording index build error: '%s'", artist_credit_id, e.what());
+                    stupid_recording_index.reset();
+                }
+            }
+            
+            // Build stupid release index only if we have data
+            std::unique_ptr<FuzzyIndex> stupid_release_index;
+            if (stupid_release_texts.size() > 0) {
+                stupid_release_index = std::make_unique<FuzzyIndex>();
+                try
+                {
+                    stupid_release_index->build(stupid_release_ids, stupid_release_texts);
+                }
+                catch(const std::exception& e)
+                {
+                    lb_error("artist_credit %d: Stupid release index build error: '%s'", artist_credit_id, e.what());
+                    stupid_release_index.reset();
+                }
             }
             
             auto t4 = high_resolution_clock::now();
@@ -302,12 +391,11 @@ class RecordingIndex {
                        (double)total_fuzzy_build_us / total_calls / 1000.0);
             }
             
-            ReleaseRecordingIndex ret(recording_index, release_index, links);
-            return ret;
+            return new ReleaseRecordingIndex(recording_index, release_index, std::move(stupid_recording_index), std::move(stupid_release_index), links);
         }
 
         // Convenience overload that opens its own connection (for backward compatibility)
-        ReleaseRecordingIndex
+        ReleaseRecordingIndex *
         build_recording_release_indexes(unsigned int artist_credit_id) {
             SQLite::Database db(db_file, SQLite::OPEN_READONLY);
             return build_recording_release_indexes(artist_credit_id, db);
@@ -318,6 +406,8 @@ class RecordingIndex {
         load(const int artist_credit_id, SQLite::Database &db) {
             FuzzyIndex                   *recording_index = new FuzzyIndex();
             FuzzyIndex                   *release_index = new FuzzyIndex();
+            std::unique_ptr<FuzzyIndex>  stupid_recording_index;
+            std::unique_ptr<FuzzyIndex>  stupid_release_index;
             map<unsigned int, vector<ReleaseRecordingLink>>  links;
             try
             {
@@ -331,18 +421,26 @@ class RecordingIndex {
                     std::stringstream ss;
                     ss.write(static_cast<const char*>(blob_data), blob_size);
                     ss.seekg(ios_base::beg);
+                    
                     {
                         cereal::BinaryInputArchive iarchive(ss);
-                        iarchive(*recording_index, *release_index, links);
+                        iarchive(*recording_index, *release_index);
+                        
+                        // Check if there's more data for stupid indexes (new format)
+                        // cereal handles unique_ptr serialization automatically
+                        iarchive(stupid_recording_index, stupid_release_index);
+                        iarchive(links);
                     }
+
                     
                     // Estimate in-memory size from blob size
                     size_t estimated_memory = (size_t)(blob_size * MEMORY_SIZE_RATIO);
-                    return new ReleaseRecordingIndex(recording_index, release_index, links, estimated_memory);
+                    return new ReleaseRecordingIndex(recording_index, release_index, std::move(stupid_recording_index), std::move(stupid_release_index), links, estimated_memory);
                 } else {
                     //lb_error("Cannot load index for %d", artist_credit_id);
                     delete recording_index;
                     delete release_index;
+                    // unique_ptr auto-deleted
                     return nullptr;
                 }
             }
@@ -351,6 +449,7 @@ class RecordingIndex {
                 lb_error("load rec index db exception: %s", e.what());
                 delete recording_index;
                 delete release_index;
+                // unique_ptr auto-deleted
             }
             return nullptr;
         }
@@ -372,11 +471,15 @@ class RecordingIndex {
             stringstream ss;
             {
                 cereal::BinaryOutputArchive oarchive(ss);
-                oarchive(*index.recording_index);
-                oarchive(*index.release_index);
-                oarchive(index.links);
+                oarchive(*index->recording_index);
+                oarchive(*index->release_index);
+                
+                // cereal handles unique_ptr serialization automatically
+                oarchive(index->stupid_recording_index, index->stupid_release_index);
+                oarchive(index->links);
             }
             
+            delete index;
             return ss.str();
         }
         

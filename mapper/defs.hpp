@@ -4,6 +4,7 @@
 #include <cereal/types/vector.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/map.hpp>
+#include <cereal/types/memory.hpp>  // For unique_ptr serialization
 #include <map>
 
 // Shared constants
@@ -32,15 +33,20 @@ class FuzzyIndex;
 class ReleaseRecordingIndex {
     public:
         FuzzyIndex                                       *recording_index, *release_index;
+        std::unique_ptr<FuzzyIndex>                      stupid_recording_index, stupid_release_index;
         map<unsigned int, vector<ReleaseRecordingLink>>   links;
         size_t                                            estimated_memory_size;  // estimated memory usage in bytes
 
         ReleaseRecordingIndex(FuzzyIndex *rec_index,
-                              FuzzyIndex *rel_index, 
+                              FuzzyIndex *rel_index,
+                              std::unique_ptr<FuzzyIndex> stupid_rec_index,
+                              std::unique_ptr<FuzzyIndex> stupid_rel_index,
                               map<unsigned int, vector<ReleaseRecordingLink>> &_links,
                               size_t memory_size = 0) {
             recording_index = rec_index;
             release_index = rel_index;
+            stupid_recording_index = std::move(stupid_rec_index);
+            stupid_release_index = std::move(stupid_rel_index);
             links = _links;
             estimated_memory_size = memory_size;
         };

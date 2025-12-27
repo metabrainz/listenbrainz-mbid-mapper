@@ -56,12 +56,14 @@ void thread_build_index(RecordingIndex *ri, CreatorThread *th, unsigned int arti
     auto index = ri->build_recording_release_indexes(artist_id, *tl_db);
     {
         cereal::BinaryOutputArchive oarchive(*th->sstream);
-        oarchive(*index.recording_index);
-        oarchive(*index.release_index);
-        oarchive(index.links);
+        oarchive(*index->recording_index);
+        oarchive(*index->release_index);
+        oarchive(index->stupid_recording_index, index->stupid_release_index);
+        oarchive(index->links);
     }
-    // Note: index.recording_index and index.release_index are deleted by
-    // ReleaseRecordingIndex destructor when 'index' goes out of scope
+    // Note: index->recording_index and index->release_index are deleted by
+    // ReleaseRecordingIndex destructor when 'index' is deleted
+    delete index;
     th->sstream->seekg(ios_base::end);
     th->sstream->seekg(ios_base::beg);
     th->done.store(true, std::memory_order_release);

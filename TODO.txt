@@ -2,6 +2,7 @@
 3. empty rows in source mapping
 3. Is there thread level segfault isolation?
 4. Add monitoring -- add cache items
+4. stupid indexes, make sure zero length doesn't slow anything down
 
 
 Problematic test case:
