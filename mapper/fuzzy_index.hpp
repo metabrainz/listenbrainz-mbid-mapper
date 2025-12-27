@@ -10,7 +10,6 @@ using namespace std;
 
 #include "defs.hpp"
 #include "tfidf_vectorizer.hpp"
-#include "murmur_vectorizer.hpp"
 #include "levenshtein.hpp"
 
 #include <cereal/archives/binary.hpp>
@@ -38,9 +37,7 @@ class FuzzyIndex {
     private:
         similarity::Index<float> *index = nullptr;
         similarity::Space<float> *space = nullptr;
-        TfIdfVectorizer           tfidf_vectorizer;
-        MurmurHashVectorizer      murmur_vectorizer;
-        bool                      use_murmur_hash;
+     	TfIdfVectorizer           vectorizer;
         similarity::ObjectVector  vectorized_data;
 
     public:
@@ -48,10 +45,9 @@ class FuzzyIndex {
         vector<unsigned int>      index_ids; 
         vector<string>            index_texts;   // the full text field, needed for matching long query strings
 
-        FuzzyIndex(bool use_murmur_hash = false)
-            : tfidf_vectorizer(false, false),
-              use_murmur_hash(use_murmur_hash)
-        {
+        FuzzyIndex() :
+     	    vectorizer(false, false) {
+
             space = similarity::SpaceFactoryRegistry<float>::Instance().CreateSpace("negdotprod_sparse_fast",
                                                                                     similarity::AnyParams());
         }
@@ -108,9 +104,7 @@ class FuzzyIndex {
             for(auto & it : text_data)
                 short_texts.push_back(it.substr(0, MAX_ENCODED_STRING_LENGTH));
            
-            arma::sp_mat matrix = use_murmur_hash ? 
-                murmur_vectorizer.fit_transform(short_texts) : 
-                tfidf_vectorizer.fit_transform(short_texts);
+            arma::sp_mat matrix = vectorizer.fit_transform(short_texts);
             transform_text(matrix, vectorized_data);
             
             index = similarity::MethodFactoryRegistry<float>::Instance().CreateMethod(false,
@@ -134,9 +128,7 @@ class FuzzyIndex {
             vector<IndexResult> *results = new vector<IndexResult>;
 
             text_data.push_back(query_string.substr(0, MAX_ENCODED_STRING_LENGTH));
-            arma::sp_mat matrix = use_murmur_hash ? 
-                murmur_vectorizer.transform(text_data) : 
-                tfidf_vectorizer.transform(text_data);
+            arma::sp_mat matrix = vectorizer.transform(text_data);
             transform_text(matrix, data);
 
             unsigned k = NUM_FUZZY_SEARCH_RESULTS;
@@ -225,11 +217,7 @@ class FuzzyIndex {
             vector<uint8_t> index_data;
             if (index)
                 index->SerializeIndex(index_data, vectorized_data);
-            if (use_murmur_hash) {
-                archive(index_data, use_murmur_hash, index_ids, index_texts);
-            } else {
-                archive(index_data, use_murmur_hash, tfidf_vectorizer, index_ids, index_texts);
-            }
+            archive(index_data, vectorizer, index_ids, index_texts); 
         }
       
         template<class Archive>
@@ -243,12 +231,7 @@ class FuzzyIndex {
             vectorized_data.clear();
 
             // Restore our data
-            archive(index_data, use_murmur_hash);
-            if (use_murmur_hash) {
-                archive(index_ids, index_texts);
-            } else {
-                archive(tfidf_vectorizer, index_ids, index_texts);
-            }
+            archive(index_data, vectorizer, index_ids, index_texts); 
             delete index;
             
             
