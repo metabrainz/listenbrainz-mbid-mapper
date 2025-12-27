@@ -153,13 +153,17 @@ void MakeMapping::create() {
     auto t1 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
     lb_log("\nMapping database created in %.3f seconds.", duration.count() / 1000.0);
+    
+    // Generate n-gram tables
+    lb_log("\nGenerating n-gram tables...");
+    PopularNgram::generate_popular_ngrams(db);
 }
 
 void print_usage() {
     lb_log("Usage: make_mapping [options]");
     lb_log("");
     lb_log("Options:");
-    lb_log("  --popular_ngrams  Generate 3-gram histogram from release names");
+    lb_log("  --ngrams-only  Only regenerate n-gram tables (requires existing mapping.db)");
     lb_log("");
     lb_log("Required environment variables:");
     lb_log("  INDEX_DIR                         Directory to create mapping.db in");
@@ -179,7 +183,7 @@ int main(int argc, char *argv[])
         if (arg == "--help" || arg == "-h") {
             print_usage();
             return 0;
-        } else if (arg == "--popular-ngrams") {
+        } else if (arg == "--ngrams-only") {
             generate_ngrams = true;
         } else {
             lb_error("Error: Unknown option: %s", arg.c_str());
@@ -209,9 +213,18 @@ int main(int argc, char *argv[])
         MakeMapping importer(index_dir);
         
         if (generate_ngrams) {
-            // Generate n-gram histogram from PostgreSQL data
-            PopularNgram::generate_popular_ngrams();
-            lb_log("N-gram histogram generated successfully!");
+            // Only regenerate n-gram tables
+            string db_file = index_dir + "/mapping.db";
+            if (!std::filesystem::exists(db_file)) {
+                lb_error("Error: Database file does not exist: %s", db_file.c_str());
+                lb_error("Run make_mapping without --only-ngrams to create the database first.");
+                return -1;
+            }
+            
+            lb_log("Opening existing database: %s", db_file.c_str());
+            SQLite::Database db(db_file, SQLite::OPEN_READWRITE);
+            PopularNgram::generate_popular_ngrams(db);
+            lb_log("N-gram tables regenerated successfully!");
         } else {
             // Create mapping database with all data
             importer.create();

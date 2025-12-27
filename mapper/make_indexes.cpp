@@ -3,6 +3,7 @@
 
 #include "artist_index.hpp"
 #include "indexer_thread.hpp"
+#include "popular_ngram.hpp"
 #include "utils.hpp"
 #include "SQLiteCpp.h"
 #include "init.h"  // nmslib init
@@ -99,7 +100,7 @@ int main(int argc, char *argv[])
     // Initialize nmslib once in main thread before ANY FuzzyIndex is created
     // This is necessary because initLibrary() is not thread-safe (it modifies global registries)
     similarity::initLibrary(0, LIB_LOGNONE, NULL);
-
+    
     if (!skip_artists) {
         lb_log("build artist indexes");
         ArtistIndex *artist_index = new ArtistIndex(index_dir);
@@ -114,9 +115,22 @@ int main(int argc, char *argv[])
     // 0 means use number of CPU cores
     num_threads = (num_threads <= 0) ? std::thread::hardware_concurrency() : num_threads;
     if (num_threads <= 0) num_threads = 4;  // fallback if hardware_concurrency() fails
+    
+    // Load ngrams from database
+    lb_log("Loading n-grams from database...");
+    vector<string> release_ngrams, recording_ngrams;
+    try {
+        SQLite::Database db(db_file, SQLite::OPEN_READONLY);
+        auto ngrams_pair = PopularNgram::load_all_ngrams(db);
+        release_ngrams = ngrams_pair.first;
+        recording_ngrams = ngrams_pair.second;
+    } catch (const std::exception& e) {
+        lb_error("Error loading n-grams: %s", e.what());
+        return -1;
+    }
                                             
     lb_log("build recording indexes with %d threads", num_threads);
-    IndexerThread mapping(index_dir, num_threads);
+    IndexerThread mapping(index_dir, num_threads, &release_ngrams, &recording_ngrams);
     mapping.build_recording_indexes();
 
     // Recreate the index after force rebuild
