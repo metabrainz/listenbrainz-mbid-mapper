@@ -13,6 +13,7 @@ using namespace std;
 #include "defs.hpp"
 #include "tfidf_vectorizer.hpp"
 #include "levenshtein.hpp"
+#include "popular_ngram.hpp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/types/vector.hpp>
@@ -45,7 +46,7 @@ class FuzzyIndex {
         vector<string>            index_texts;
 
         // Default to false to preserve legacy Artist index behavior
-        FuzzyIndex(bool use_hnsw = false, const vector<string> *ngrams = nullptr) :
+        FuzzyIndex(bool use_hnsw = false, const PopularNgram *ngrams = nullptr) :
              vectorizer(false, false), use_hnsw(use_hnsw) {
 
             string space_type = use_hnsw ? "cosinesimil_sparse" : "negdotprod_sparse_fast";
@@ -53,9 +54,9 @@ class FuzzyIndex {
                 space_type, similarity::AnyParams());
             
             // Set global weights from ngrams if provided
-            if (ngrams != nullptr && !ngrams->empty()) {
+            if (ngrams != nullptr && !ngrams->ngrams.empty()) {
                 std::unordered_map<std::string, double> global_idf;
-                for (const auto& ngram : *ngrams) {
+                for (const auto& ngram : ngrams->ngrams) {
                     global_idf[ngram] = 1.0;  // Weight of 1.0 for all popular ngrams
                 }
                 vectorizer.set_global_weights(global_idf);

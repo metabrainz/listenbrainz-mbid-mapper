@@ -9,7 +9,6 @@
 #include <cstring>
 #include <libpq-fe.h>
 #include "SQLiteCpp.h"
-#include "fuzzy_index.hpp"
 #include "tfidf_vectorizer.hpp"
 #include "encode.hpp"
 #include "utils.hpp"
@@ -18,9 +17,17 @@ using namespace std;
 
 #define MAX_NGRAMS 500000
 
-namespace PopularNgram {
-
-inline void generate_ngram_histogram(PGconn* conn, SQLite::Database& db, const string& table_name, const string& column_name, const string& sqlite_table) {
+class PopularNgram {
+public:
+    vector<string> ngrams;
+    int total_rows;
+    
+    PopularNgram() : total_rows(0) {}
+    
+    PopularNgram(vector<string> _ngrams, int _total_rows) 
+        : ngrams(std::move(_ngrams)), total_rows(_total_rows) {}
+    
+    static void generate_ngram_histogram(PGconn* conn, SQLite::Database& db, const string& table_name, const string& column_name, const string& sqlite_table) {
     // Query to get ALL names from the specified table
     lb_log("Querying distinct %s names from PostgreSQL...", table_name.c_str());
     string query_str = "SELECT DISTINCT " + column_name + " FROM musicbrainz." + table_name + " WHERE " + column_name + " IS NOT NULL ORDER BY " + column_name;
@@ -62,14 +69,7 @@ inline void generate_ngram_histogram(PGconn* conn, SQLite::Database& db, const s
     PQclear(res);
     
     lb_log("Total %s names processed: %d", table_name.c_str(), count);
-    
-    // Sort by frequency (ascending)
-    vector<pair<string, int>> sorted_ngrams(ngram_counts.begin(), ngram_counts.end());
-    sort(sorted_ngrams.begin(), sorted_ngrams.end(),
-         [](const pair<string, int>& a, const pair<string, int>& b) {
-             return a.second < b.second;
-         });
-    lb_log("Total sorted unique 3-grams: %zu", ngram_counts.size());
+    lb_log("Total unique 3-grams: %zu", ngram_counts.size());
     
     // Drop existing table if it exists and create new one
     db.exec("DROP TABLE IF EXISTS " + sqlite_table);
@@ -80,7 +80,7 @@ inline void generate_ngram_histogram(PGconn* conn, SQLite::Database& db, const s
     
     db.exec("BEGIN TRANSACTION");
     int total = 0;
-    for (const auto& pair : sorted_ngrams) {
+    for (const auto& pair : ngram_counts) {
         insert.bind(1, pair.first);
         insert.bind(2, pair.second);
         insert.exec();
@@ -89,12 +89,19 @@ inline void generate_ngram_histogram(PGconn* conn, SQLite::Database& db, const s
         if (total >= MAX_NGRAMS)
             break;
     }
+    
+    // Save total document count as metadata (empty ngram with frequency = total rows)
+    insert.bind(1, "");
+    insert.bind(2, count);
+    insert.exec();
+    insert.reset();
+    
     db.exec("COMMIT");
     
-    lb_log("Successfully wrote %d unique 3-grams to table: %s", total, sqlite_table.c_str());
+    lb_log("Successfully wrote %d unique 3-grams to table: %s (total documents: %d)", total, sqlite_table.c_str(), count);
 }
 
-inline void generate_popular_ngrams(SQLite::Database& db) {
+static void generate_popular_ngrams(SQLite::Database& db) {
     try {
         lb_log("Generating 3-gram histograms from release and recording names...");
         
@@ -131,31 +138,38 @@ inline void generate_popular_ngrams(SQLite::Database& db) {
     }
 }
 
-inline vector<string> load_ngrams(SQLite::Database& db, const string& sqlite_table) {
+static PopularNgram load_ngrams(SQLite::Database& db, const string& sqlite_table) {
     vector<string> ngrams;
+    int total_rows = 0;
     
     try {
-        SQLite::Statement query(db, "SELECT ngram FROM " + sqlite_table + " ORDER BY frequency ASC");
+        SQLite::Statement query(db, "SELECT ngram, frequency FROM " + sqlite_table + " ORDER BY frequency DESC");
         
         while (query.executeStep()) {
             string ngram = query.getColumn(0).getString();
-            ngrams.push_back(ngram);
+            int frequency = query.getColumn(1).getInt();
+            
+            // Empty ngram contains total document count
+            if (ngram.empty()) {
+                total_rows = frequency;
+            } else {
+                ngrams.push_back(ngram);
+            }
         }
         
-        lb_log("Loaded %zu n-grams from table: %s", ngrams.size(), sqlite_table.c_str());
+        lb_log("Loaded %zu n-grams from table: %s (total documents: %d)", ngrams.size(), sqlite_table.c_str(), total_rows);
     } catch (const std::exception& e) {
         lb_error("Error loading n-grams from table %s: %s", sqlite_table.c_str(), e.what());
         throw;
     }
     
-    return ngrams;
+    return PopularNgram(ngrams, total_rows);
 }
 
-inline pair<vector<string>, vector<string>> load_all_ngrams(SQLite::Database& db) {
+static pair<PopularNgram, PopularNgram> load_all_ngrams(SQLite::Database& db) {
     auto release_ngrams = load_ngrams(db, "release_ngram");
     auto recording_ngrams = load_ngrams(db, "recording_ngram");
     return make_pair(release_ngrams, recording_ngrams);
 }
-
-} // namespace PopularNgram
+};
 

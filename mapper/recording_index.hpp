@@ -130,7 +130,7 @@ class RecordingIndex {
 
         ReleaseRecordingIndex *
         build_recording_release_indexes(unsigned int artist_credit_id, SQLite::Database &db,
-                                       const vector<string> *release_ngrams = nullptr, const vector<string> *recording_ngrams = nullptr) {
+                                       const PopularNgram *release_ngrams = nullptr, const PopularNgram *recording_ngrams = nullptr) {
             using namespace std::chrono;
             
             // Thread-local timing accumulators
