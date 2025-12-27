@@ -1,4 +1,5 @@
 #include "make_mapping.hpp"
+#include "popular_ngram.hpp"
 #include "artist_index.hpp"
 #include "indexer_thread.hpp"
 #include "custom_sorts.hpp"
@@ -155,7 +156,10 @@ void MakeMapping::create() {
 }
 
 void print_usage() {
-    lb_log("Usage: make_mapping");
+    lb_log("Usage: make_mapping [options]");
+    lb_log("");
+    lb_log("Options:");
+    lb_log("  --popular_ngrams  Generate 3-gram histogram from release names");
     lb_log("");
     lb_log("Required environment variables:");
     lb_log("  INDEX_DIR                         Directory to create mapping.db in");
@@ -167,12 +171,16 @@ int main(int argc, char *argv[])
     init_logging();
     load_env_file();  // Load .env file, env vars take precedence
     
+    bool generate_ngrams = false;
+    
     // Parse arguments (options only)
     for (int i = 1; i < argc; i++) {
         string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
             print_usage();
             return 0;
+        } else if (arg == "--popular-ngrams") {
+            generate_ngrams = true;
         } else {
             lb_error("Error: Unknown option: %s", arg.c_str());
             print_usage();
@@ -198,10 +206,17 @@ int main(int argc, char *argv[])
     }
     
     try {
-        // Create mapping database with all data
         MakeMapping importer(index_dir);
-        importer.create();
-        lb_log("Mapping database created successfully!");
+        
+        if (generate_ngrams) {
+            // Generate n-gram histogram from PostgreSQL data
+            PopularNgram::generate_popular_ngrams();
+            lb_log("N-gram histogram generated successfully!");
+        } else {
+            // Create mapping database with all data
+            importer.create();
+            lb_log("Mapping database created successfully!");
+        }
     } catch (const std::exception& e) {
         lb_error("Error: %s", e.what());
         return -1;

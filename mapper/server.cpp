@@ -323,8 +323,29 @@ int main(int argc, char* argv[]) {
             return escaped.str();
         };
         
+        // Collect all test cases from all test groups
+        std::vector<TestCase> all_test_cases;
+        auto append = [&](const std::vector<TestCase>& cases) {
+            all_test_cases.insert(all_test_cases.end(), cases.begin(), cases.end());
+        };
+        append(get_basic_tests());
+        append(get_messy_input_tests());
+        append(get_release_selection_tests());
+        append(get_no_release_tests());
+        append(get_obscure_release_tests());
+        append(get_obscure_recording_tests());
+        append(get_special_character_tests());
+        append(get_artist_credit_tests());
+        append(get_non_album_recording_tests());
+        append(get_avoid_popular_match_tests());
+        append(get_punctuation_tests());
+        append(get_second_best_release_tests());
+        append(get_fuzzy_release_tests());
+        append(get_recording_alias_tests());
+        append(get_overloaded_artist_tests());
+        
         std::vector<crow::mustache::context> cases_list;
-        for (const auto& tc : get_test_cases()) {
+        for (const auto& tc : all_test_cases) {
             crow::mustache::context tc_ctx;
             tc_ctx["artist_credit_name"] = tc.artist_credit_name;
             tc_ctx["release_name"] = tc.release_name;

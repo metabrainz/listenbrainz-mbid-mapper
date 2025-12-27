@@ -78,6 +78,8 @@ class TfIdfVectorizer
         std::map<std::string, double> get_idf_();
         std::map<std::string, size_t> get_vocabulary_();
         
+        std::vector<std::string> tokenise_document(std::string& document);
+        
         template<class Archive>
         void serialize(Archive & archive)
         {
@@ -85,7 +87,6 @@ class TfIdfVectorizer
         }
         
     protected:
-        std::vector<std::string> tokenise_document(std::string& document);
         std::vector<std::vector<std::string>> tokenise_documents(std::vector<std::string>& documents);
         std::vector<std::map<std::string, int>> word_count(std::vector<std::vector<std::string>>& documents_tokenised);
         std::vector<std::map<std::string, double>> tf(std::vector<std::vector<std::string>>& documents_tokenised);
