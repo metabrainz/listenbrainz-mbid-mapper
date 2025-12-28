@@ -2,6 +2,7 @@
 3. empty rows in source mapping
 3. Is there thread level segfault isolation?
 4. Add monitoring -- add cache items
+4. stupid indexes, make sure zero length doesn't slow anything down
 
 
 Problematic test case:
@@ -14,21 +15,3 @@ Incremental updates:
 notes:
 
 carton exec -- admin/replication/LoadReplicationChanges --limit 24
-
-
-
-
-
-Check later
-Post-processing for HNSW - The Levenshtein post-processing is applied to both methods. For HNSW, you might want to skip this or adjust thresholds since HNSW should already be handling long strings better via global IDF.
-
-
-
-
-Perfect! The fix is in place. Now when HNSW indexes are loaded from the database:
-
-They skip the SerializeIndex call (which would fail)
-On load, they rebuild the HNSW index from the stored index_ids and index_texts
-The vectorizer (with global IDF weights) is preserved through serialization
-Inverted indexes continue to work as before with direct serialization
-This means HNSW indexes will take slightly longer to load (rebuild time) but will work correctly.
