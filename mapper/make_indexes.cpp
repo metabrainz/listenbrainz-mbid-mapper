@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
     
     // Load ngrams from database
     lb_log("Loading n-grams from database...");
-    PopularNgram release_ngrams, recording_ngrams;
+    vector<string> release_ngrams, recording_ngrams;
     try {
         SQLite::Database db(db_file, SQLite::OPEN_READONLY);
         auto ngrams_pair = PopularNgram::load_all_ngrams(db);

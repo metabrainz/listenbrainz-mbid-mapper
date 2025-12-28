@@ -41,7 +41,7 @@ class CreatorThread {
 // Thread-local database connection for reading during index building
 // Using thread_local avoids the overhead of opening/closing connections per artist
 void thread_build_index(RecordingIndex *ri, CreatorThread *th, unsigned int artist_id, const string &db_file,
-                        const PopularNgram *release_ngrams = nullptr, const PopularNgram *recording_ngrams = nullptr) {
+                        const vector<string> *release_ngrams = nullptr, const vector<string> *recording_ngrams = nullptr) {
     // Thread-local connection: opened once per thread, reused for all artists processed by this thread
     thread_local unique_ptr<SQLite::Database> tl_db;
     
@@ -74,13 +74,13 @@ class IndexerThread {
     private:
         string                  index_dir, db_file;
         int                     num_threads;
-        const PopularNgram      *release_ngrams;
-        const PopularNgram      *recording_ngrams;
+        const vector<string>    *release_ngrams;
+        const vector<string>    *recording_ngrams;
 
     public:
 
         IndexerThread(const string &_index_dir, int _num_threads,
-                     const PopularNgram *_release_ngrams = nullptr, const PopularNgram *_recording_ngrams = nullptr) 
+                     const vector<string> *_release_ngrams = nullptr, const vector<string> *_recording_ngrams = nullptr) 
             : release_ngrams(_release_ngrams), recording_ngrams(_recording_ngrams) { 
             index_dir = _index_dir;
             db_file = _index_dir + "/mapping.db";
