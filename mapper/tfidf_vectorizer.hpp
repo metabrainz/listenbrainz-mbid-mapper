@@ -31,8 +31,8 @@ class TfIdfVectorizer
          */
         void set_global_weights(const std::unordered_map<std::string, double>& global_idf);
 
-        std::unordered_map<std::string, double> get_idf_();
-        std::unordered_map<std::string, size_t> get_vocabulary_();
+        std::map<std::string, double> get_idf_();
+        std::map<std::string, size_t> get_vocabulary_();
         std::vector<std::string> tokenise_document(std::string& document);
         
         template<class Archive>
@@ -48,8 +48,8 @@ class TfIdfVectorizer
         std::map<std::string, double> idf(std::vector<std::map<std::string, int>>& documents_word_counts);
 
     private:
-        std::unordered_map<std::string, double> idf_;
-        std::unordered_map<std::string, size_t> vocabulary_;
+        std::map<std::string, double> idf_;
+        std::map<std::string, size_t> vocabulary_;
         bool binary;
         int max_features;
         double p;
