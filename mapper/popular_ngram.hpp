@@ -21,11 +21,18 @@ class PopularNgram {
 public:
     vector<string> ngrams;
     int total_rows;
+    unordered_map<string, double> global_idf_map;  // Pre-computed map for efficiency
     
     PopularNgram() : total_rows(0) {}
     
     PopularNgram(vector<string> _ngrams, int _total_rows) 
-        : ngrams(std::move(_ngrams)), total_rows(_total_rows) {}
+        : ngrams(std::move(_ngrams)), total_rows(_total_rows) {
+        // Pre-compute the global IDF map once
+        global_idf_map.reserve(ngrams.size());
+        for (const auto& ngram : ngrams) {
+            global_idf_map[ngram] = 1.0;
+        }
+    }
     
     static void generate_ngram_histogram(PGconn* conn, SQLite::Database& db, const string& table_name, const string& column_name, const string& sqlite_table) {
     // Query to get ALL names from the specified table

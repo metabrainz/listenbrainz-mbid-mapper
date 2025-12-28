@@ -5,9 +5,7 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <cmath>
-#include <algorithm>
-
+#include <math.h>
 using namespace std;
 
 #include "defs.hpp"
@@ -21,6 +19,7 @@ using namespace std;
 
 #include "index.h"
 #include "init.h"
+#include "index.h"
 #include "params.h"
 #include "rangequery.h"
 #include "knnquery.h"
@@ -30,6 +29,8 @@ using namespace std;
 #include "space.h"
 #include "space/space_vector.h"
 #include "space/space_sparse_vector.h"
+#include "knnquery.h"
+#include "knnqueue.h"
 
 const auto NUM_FUZZY_SEARCH_RESULTS = 10;
 
@@ -37,30 +38,23 @@ class FuzzyIndex {
     private:
         similarity::Index<float> *index = nullptr;
         similarity::Space<float> *space = nullptr;
-        TfIdfVectorizer           vectorizer;
+     	TfIdfVectorizer           vectorizer;
         similarity::ObjectVector  vectorized_data;
 
     public:
-        vector<unsigned int>      index_ids; 
-        vector<string>            index_texts;
 
-        /**
-         * Constructor
-         * @param ngrams: Optional pointer to PopularNgram data to seed Global IDF weights.
-         */
+        vector<unsigned int>      index_ids; 
+        vector<string>            index_texts;   // the full text field, needed for matching long query strings
+
         FuzzyIndex(const PopularNgram *ngrams = nullptr) :
              vectorizer(false, false) {
 
             space = similarity::SpaceFactoryRegistry<float>::Instance().CreateSpace(
                 "negdotprod_sparse_fast", similarity::AnyParams());
             
-            // Set global weights from ngrams if provided
-            if (ngrams != nullptr && !ngrams->ngrams.empty()) {
-                std::unordered_map<std::string, double> global_idf;
-                for (const auto& ngram : ngrams->ngrams) {
-                    global_idf[ngram] = 1.0;  // Weight of 1.0 for all popular ngrams
-                }
-                vectorizer.set_global_weights(global_idf);
+            // Set global weights from pre-computed map if provided
+            if (ngrams != nullptr && !ngrams->global_idf_map.empty()) {
+                vectorizer.set_global_weights(ngrams->global_idf_map);
             }
         }
         
@@ -70,169 +64,193 @@ class FuzzyIndex {
             delete index;
             delete space;
         }
-
-        string get_index_text(unsigned int offset) {
-            if (offset >= index_texts.size()) return "";
+        
+        string
+        get_index_text(unsigned int offset) {
+            if (offset >= index_texts.size()) {
+                printf("ERROR: get_index_text offset %u out of bounds (size: %zu)\n", offset, index_texts.size());
+                fflush(stdout);
+                return "";
+            }
             return index_texts[offset];
         }
 
-        /**
-         * Converts the Armadillo sparse matrix into NMSLIB ObjectVector format.
-         */
-        void transform_text(const arma::sp_mat &matrix, similarity::ObjectVector &data) {
+        void
+        transform_text(const arma::sp_mat &matrix, similarity::ObjectVector &data) {
+            std::vector<similarity::SparseVectElem<float>> sparse_items;            
             auto sparse_space = reinterpret_cast<const similarity::SpaceSparseVector<float>*>(space);
-            
-            for (arma::uword c = 0; c < matrix.n_cols; ++c) {
-                std::vector<similarity::SparseVectElem<float>> sparse_items;
-
-                for (arma::sp_mat::const_col_iterator it = matrix.begin_col(c); it != matrix.end_col(c); ++it) {
-                    float val = static_cast<float>(*it);
-                    sparse_items.push_back(similarity::SparseVectElem<float>(it.row(), val));
+           
+            arma::uword last_col = 0;
+            for(arma::sp_mat::const_iterator it = matrix.begin(); it != matrix.end(); ++it) {
+                if (it.col() != last_col) {
+                    std::sort(sparse_items.begin(), sparse_items.end());
+                    data.push_back(sparse_space->CreateObjFromVect(it.col()-1, -1, sparse_items));
+                    sparse_items.clear();
                 }
-
-                std::sort(sparse_items.begin(), sparse_items.end());
-                data.push_back(sparse_space->CreateObjFromVect(c, -1, sparse_items));
+                sparse_items.push_back(similarity::SparseVectElem<float>(it.row(), *it));
+                last_col = it.col();
             }
+            std::sort(sparse_items.begin(), sparse_items.end());
+            data.push_back(sparse_space->CreateObjFromVect(last_col, -1, sparse_items));
+            sparse_items.clear();
         }
 
-        /**
-         * Builds the index.
-         */
-        void build(vector<unsigned int> &_index_ids, vector<string> &text_data) {
-            if (text_data.empty()) throw std::length_error("no index data provided.");
+        void
+        build(vector<unsigned int> &_index_ids, vector<string> &text_data) {
             
+            if (text_data.size() == 0)
+                throw std::length_error("no index data provided.");
+            if (text_data.size() != _index_ids.size())
+                throw std::length_error("Length of ids and text vectors differs!");
+
+            // Make a copy, I hope, of the index id data and hold on to it
             index_ids = _index_ids; 
             index_texts = text_data;
             vector<string> short_texts;
             for(auto & it : text_data)
                 short_texts.push_back(it.substr(0, MAX_ENCODED_STRING_LENGTH));
            
-            // Ensure we don't overwrite global weights if they were provided in constructor
-            arma::sp_mat matrix;
-            if (vectorizer.get_vocabulary_().empty()) {
-                matrix = vectorizer.fit_transform(short_texts);
-            } else {
-                matrix = vectorizer.transform(short_texts);
-            }
+            // fit_transform builds the vocabulary from the data and applies global weights if set
+            arma::sp_mat matrix = vectorizer.fit_transform(short_texts);
             transform_text(matrix, vectorized_data);
             
-            // Use the fast inverted index with global weights
-            index = similarity::MethodFactoryRegistry<float>::Instance().CreateMethod(
-                false, 
-                "simple_invindx",
-                "negdotprod_sparse_fast",
-                *space, 
-                vectorized_data
-            );
-            index->CreateIndex(similarity::AnyParams());
+            index = similarity::MethodFactoryRegistry<float>::Instance().CreateMethod(false,
+                        "simple_invindx",
+                        "negdotprod_sparse_fast",
+                         *space,
+                         vectorized_data);
+            similarity::AnyParams index_params;
+
+            index->CreateIndex(index_params);
         }
 
-        /**
-         * Search function that calculates confidence and handles long string post-processing.
-         */
-        vector<IndexResult> * search(const string &query_string, float min_confidence, char source) {
-            if (index == nullptr) return nullptr;
+        vector<IndexResult> *
+        search(const string &query_string, float min_confidence, char source) {
+            vector<string> text_data;
+            similarity::ObjectVector data;
             
-            vector<string> text_data = { query_string.substr(0, MAX_ENCODED_STRING_LENGTH) };
-            similarity::ObjectVector query_data;
+            if (index == nullptr)
+                return nullptr;
             
-            // Vectorize query using existing weights
-            arma::sp_mat matrix = vectorizer.transform(text_data);
-            transform_text(matrix, query_data);
-
-            unsigned k = NUM_FUZZY_SEARCH_RESULTS;
-            const unsigned max_k = 1000;
             vector<IndexResult> *results = new vector<IndexResult>;
 
+            text_data.push_back(query_string.substr(0, MAX_ENCODED_STRING_LENGTH));
+            arma::sp_mat matrix = vectorizer.transform(text_data);
+            transform_text(matrix, data);
+
+            unsigned k = NUM_FUZZY_SEARCH_RESULTS;
+            bool has_long = false;
+            const unsigned max_k = 1000; // Reasonable upper limit to prevent infinite growth
+            
+            // Epsilon for floating point comparison - accounts for FP precision issues
+            // where perfect matches may compute to 0.9999999 instead of exactly 1.0
+            constexpr float PERFECT_MATCH_EPSILON = 1e-6f;
+
+            // Keep searching with increasing k until we get some non-perfect matches
             while (k <= max_k) {
-                similarity::KNNQuery<float> knn(*space, query_data[0], k);
+                similarity::KNNQuery<float> knn(*space, data[0], k);
                 index->Search(&knn, -1);
+
+                bool found_non_perfect = false;
+                results->clear(); // Clear previous results
+                has_long = false; // Reset for each iteration
                 
-                results->clear();
                 auto queue = knn.Result()->Clone();
                 while (!queue->Empty()) {
-                    // Negate distance (negative dot product) to get positive confidence score
-                    float dist = -queue->TopDistance();
-                    
+                    auto dist = -queue->TopDistance();
                     if (dist >= min_confidence) {
+                        if (index_texts[queue->TopObject()->id()].size() > MAX_ENCODED_STRING_LENGTH)
+                            has_long = true;
                         results->push_back(IndexResult(index_ids[queue->TopObject()->id()], queue->TopObject()->id(), dist, source));
+                        
+                        // Check if this result has confidence < 1.0 (with epsilon tolerance)
+                        // This prevents FP precision issues from causing early termination
+                        if (dist < (1.0f - PERFECT_MATCH_EPSILON)) {
+                            found_non_perfect = true;
+                        }
                     }
                     queue->Pop();
                 }
                 delete queue;
                 
-                if (results->size() < k) break;
+                // If we found some non-perfect matches, no results at all, or we have results but 
+                // didn't get any new results in this iteration (k exceeds index size), we're done
+                if (found_non_perfect || results->empty() || results->size() < k) {
+                    break;
+                }
+                
+                // If all results are still perfect matches (1.0), double k and try again
                 k += NUM_FUZZY_SEARCH_RESULTS;
             }
-
-            for(auto &obj : query_data) delete obj;
+            for(auto &obj : data)
+                delete obj;
             
-            // NMSLIB returns min-distance first; we want highest confidence first
             reverse(results->begin(), results->end());
-
-            // Check if post-processing is needed for strings exceeding n-gram limit
-            bool needs_post = query_string.size() > MAX_ENCODED_STRING_LENGTH;
-            if(!needs_post) {
-                for(auto &r : *results) {
-                    if(index_texts[r.result_index].size() > MAX_ENCODED_STRING_LENGTH) {
-                        needs_post = true; 
-                        break;
-                    }
-                }
-            }
-
-            if (needs_post) {
+            if (query_string.size() > MAX_ENCODED_STRING_LENGTH || has_long) {
                 auto updated = post_process_long_query(query_string, results, min_confidence, source);
                 delete results;
                 return updated;
             }
+
             return results;
         }
-
-        vector<IndexResult> * post_process_long_query(const string &query, vector<IndexResult> *results, float min_confidence, char source) {
+         
+        vector<IndexResult> *
+        post_process_long_query(const string &query, vector<IndexResult> *results, float min_confidence, char source) {
             vector<IndexResult> *updated = new vector<IndexResult>;
+          
             for(int i = results->size() - 1; i >= 0; i--) {
                 unsigned int id = (*results)[i].id;
-                unsigned int offset = (*results)[i].result_index;
-                
+                unsigned int index = (*results)[i].result_index;
                 size_t dist = lev_edit_distance(query.size(), (const lev_byte*)query.c_str(), 
-                                                index_texts[offset].size(), (const lev_byte*)index_texts[offset].c_str(), 1);
-                
-                float conf = (dist == 0) ? 1.0f : 1.0f - ((float)dist / (float)max(query.size(), index_texts[offset].size()));
+                                                index_texts[index].size(), (const lev_byte*)index_texts[index].c_str(), 1);
+                float conf;
+                if (dist == 0)
+                    conf = 1.0;
+                else 
+                    conf = 1.0 - fabs((float)dist / query.size());
 
                 if (conf >= min_confidence) {
-                    updated->push_back({ id, offset, conf, source });
+                    IndexResult temp = { id, index, conf, source };
+                    updated->push_back(temp);
                 }
             }
             return updated;
         }
 
         template<class Archive>
-        void save(Archive & archive) const {
+        void save(Archive & archive) const
+        {
             vector<uint8_t> index_data;
-            if (index) index->SerializeIndex(index_data, vectorized_data);
-            // vectorizer is serialized here, preserving the global weights
+            if (index)
+                index->SerializeIndex(index_data, vectorized_data);
             archive(index_data, vectorizer, index_ids, index_texts); 
         }
       
         template<class Archive>
-        void load(Archive & archive) {
+        void load(Archive & archive)
+        {
             vector<uint8_t> index_data;
-            for (auto datum : vectorized_data) delete datum;
+            // Clean up any object we may have
+            for (auto datum : vectorized_data) {
+                delete datum;
+            }
             vectorized_data.clear();
 
+            // Restore our data
             archive(index_data, vectorizer, index_ids, index_texts); 
             delete index;
-            delete space;
             
-            space = similarity::SpaceFactoryRegistry<float>::Instance().CreateSpace(
-                "negdotprod_sparse_fast", similarity::AnyParams());
             
-            if (index_data.empty()) return;
+            if (index_data.size() == 0)
+                return;
     
-            index = similarity::MethodFactoryRegistry<float>::Instance().CreateMethod(
-                false, "simple_invindx", "negdotprod_sparse_fast", *space, vectorized_data);
-            
+            auto factory = similarity::MethodFactoryRegistry<float>::Instance();
+            index = factory.CreateMethod(false, 
+                                         "simple_invindx",
+                                         "negdotprod_sparse_fast",
+                                         *space, 
+                                         vectorized_data);
             index->UnserializeIndex(index_data, vectorized_data);
         }
 };

@@ -18,6 +18,10 @@ void TfIdfVectorizer::set_global_weights(const std::unordered_map<std::string, d
 {
     this->idf_.clear();
     this->vocabulary_.clear();
+    
+    // Reserve space to avoid reallocations
+    this->idf_.reserve(global_idf.size());
+    this->vocabulary_.reserve(global_idf.size());
 
     size_t index = 0;
     for (auto const& [gram, weight] : global_idf) {
@@ -186,6 +190,6 @@ arma::sp_mat TfIdfVectorizer::transform(std::vector<std::string>& documents)
     return X_transformed;
 }
 
-std::map<std::string, double> TfIdfVectorizer::get_idf_() { return this->idf_; }
-std::map<std::string, size_t> TfIdfVectorizer::get_vocabulary_() { return this->vocabulary_; }
+std::unordered_map<std::string, double> TfIdfVectorizer::get_idf_() { return this->idf_; }
+std::unordered_map<std::string, size_t> TfIdfVectorizer::get_vocabulary_() { return this->vocabulary_; }
 
