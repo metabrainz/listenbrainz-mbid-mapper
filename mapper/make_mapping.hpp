@@ -11,11 +11,6 @@
 #include "SQLiteCpp.h"
 #include "utils.hpp"
 #include "defs.hpp"
-#include "tfidf_vectorizer.hpp"
-
-// Forward declaration for libpq types
-struct pg_conn;
-typedef struct pg_conn PGconn;
 
 using namespace std;
 

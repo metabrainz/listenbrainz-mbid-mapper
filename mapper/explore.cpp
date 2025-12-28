@@ -369,47 +369,6 @@ class Explorer {
             delete res;
         }
 
-        void top_rels() {
-            try {
-                printf("Extracting top 500,000 release names ordered by mapping score (ascending)...\n");
-                
-                string db_file = index_dir + string("/mapping.db");
-                SQLite::Database db(db_file);
-                
-                // Query to get distinct release names ordered by score (lowest first)
-                SQLite::Statement query(db, 
-                    "SELECT DISTINCT release_name "
-                    "FROM mapping "
-                    "ORDER BY score ASC "
-                    "LIMIT 500000");
-                
-                // Open output file in current directory
-                string output_file = index_dir + string("/top_releases_names.txt");
-                FILE* fp = fopen(output_file.c_str(), "w");
-                if (!fp) {
-                    printf("Error: Failed to open file for writing: %s\n", output_file.c_str());
-                    return;
-                }
-                
-                int count = 0;
-                while (query.executeStep()) {
-                    string release_name = query.getColumn(0).getText();
-                    fprintf(fp, "%s\n", release_name.c_str());
-                    count++;
-                    
-                    if (count % 10000 == 0) {
-                        printf("Written %d release names...\n", count);
-                    }
-                }
-                
-                fclose(fp);
-                printf("Successfully wrote %d release names to: %s\n", count, output_file.c_str());
-                
-            } catch (const std::exception& e) {
-                printf("Error extracting top releases: %s\n", e.what());
-            }
-        }
-
         void dump_recordings_for_artist_credit(unsigned int artist_credit_id) {
             try {
                 printf("\nLoading recordings for artist_credit_id: %u\n", artist_credit_id);
@@ -903,11 +862,9 @@ class Explorer {
                         printf("  rs portishead, teardrop\n");
                         printf("  rs björk, joga\n");
                     }
-                } else if (input == "top_rels") {
-                    top_rels();
                 } else {
                     printf("Unknown command: '%s'\n", input.c_str());
-                    printf("Available commands: a <artist>, rec <id>, rel <id>, irel <id>, j <id>, s <artist>,<release>[,<recording>], rs <artist>,<recording>, top_rels, q/quit/\\q/.q\n");
+                    printf("Available commands: a <artist>, rec <id>, rel <id>, irel <id>, j <id>, s <artist>,<release>[,<recording>], rs <artist>,<recording>, q/quit/\\q/.q\n");
                 }
             }
         }

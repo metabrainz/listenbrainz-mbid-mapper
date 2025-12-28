@@ -166,7 +166,7 @@ inline void load_env_file(const char* filename = ".env") {
 }
 
 // Returns current process RSS in MB
-inline size_t get_current_rss_mb() {
+size_t get_current_rss_mb() {
     std::ifstream statm("/proc/self/statm");
     if (!statm)
          return 0;
