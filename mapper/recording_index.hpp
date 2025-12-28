@@ -10,7 +10,6 @@
 #include "utils.hpp"
 #include "artist_index.hpp"
 #include "defs.hpp"
-#include "popular_ngram.hpp"
 #include "cereal/archives/binary.hpp"
 
 using namespace std;
@@ -129,8 +128,7 @@ class RecordingIndex {
         }
 
         ReleaseRecordingIndex *
-        build_recording_release_indexes(unsigned int artist_credit_id, SQLite::Database &db,
-                                       const vector<string> *release_ngrams = nullptr, const vector<string> *recording_ngrams = nullptr) {
+        build_recording_release_indexes(unsigned int artist_credit_id, SQLite::Database &db) {
             using namespace std::chrono;
             
             // Thread-local timing accumulators
@@ -294,7 +292,7 @@ class RecordingIndex {
             auto t3 = high_resolution_clock::now();
             total_encode_us += duration_cast<microseconds>(t3 - t2).count();
 
-            FuzzyIndex *recording_index = new FuzzyIndex(true, recording_ngrams);
+            FuzzyIndex *recording_index = new FuzzyIndex();
             if (recording_texts.size() > 0) {
                 try
                 {
@@ -313,7 +311,7 @@ class RecordingIndex {
                 // Use the actual release_id from the database, not the index
                 release_ids[it.second] = release_name_to_id_map[it.first];
             }
-            FuzzyIndex *release_index = new FuzzyIndex(true, release_ngrams);
+            FuzzyIndex *release_index = new FuzzyIndex();
             if (release_texts.size() > 0) {
                 try
                 {
@@ -394,6 +392,13 @@ class RecordingIndex {
             }
             
             return new ReleaseRecordingIndex(recording_index, release_index, std::move(stupid_recording_index), std::move(stupid_release_index), links);
+        }
+
+        // Convenience overload that opens its own connection (for backward compatibility)
+        ReleaseRecordingIndex *
+        build_recording_release_indexes(unsigned int artist_credit_id) {
+            SQLite::Database db(db_file, SQLite::OPEN_READONLY);
+            return build_recording_release_indexes(artist_credit_id, db);
         }
 
         // Load with external DB connection (for connection reuse in server)

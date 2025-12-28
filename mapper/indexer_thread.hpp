@@ -40,8 +40,7 @@ class CreatorThread {
 
 // Thread-local database connection for reading during index building
 // Using thread_local avoids the overhead of opening/closing connections per artist
-void thread_build_index(RecordingIndex *ri, CreatorThread *th, unsigned int artist_id, const string &db_file,
-                        const vector<string> *release_ngrams = nullptr, const vector<string> *recording_ngrams = nullptr) {
+void thread_build_index(RecordingIndex *ri, CreatorThread *th, unsigned int artist_id, const string &db_file) {
     // Thread-local connection: opened once per thread, reused for all artists processed by this thread
     thread_local unique_ptr<SQLite::Database> tl_db;
     
@@ -54,7 +53,7 @@ void thread_build_index(RecordingIndex *ri, CreatorThread *th, unsigned int arti
     
     th->sstream = new stringstream();
     
-    auto index = ri->build_recording_release_indexes(artist_id, *tl_db, release_ngrams, recording_ngrams);
+    auto index = ri->build_recording_release_indexes(artist_id, *tl_db);
     {
         cereal::BinaryOutputArchive oarchive(*th->sstream);
         oarchive(*index->recording_index);
@@ -74,14 +73,10 @@ class IndexerThread {
     private:
         string                  index_dir, db_file;
         int                     num_threads;
-        const vector<string>    *release_ngrams;
-        const vector<string>    *recording_ngrams;
 
     public:
 
-        IndexerThread(const string &_index_dir, int _num_threads,
-                     const vector<string> *_release_ngrams = nullptr, const vector<string> *_recording_ngrams = nullptr) 
-            : release_ngrams(_release_ngrams), recording_ngrams(_recording_ngrams) { 
+        IndexerThread(const string &_index_dir, int _num_threads) { 
             index_dir = _index_dir;
             db_file = _index_dir + "/mapping.db";
             num_threads = _num_threads;
@@ -115,10 +110,7 @@ class IndexerThread {
                 db.exec("PRAGMA synchronous=NORMAL;");
                 db.exec("PRAGMA cache_size=-262144;");  // 256MB cache
                 db.exec("PRAGMA temp_store=MEMORY;");
-               
                 
-
-
                 while (query.executeStep())
                     artist_ids.push_back(query.getColumn(0));
 
@@ -164,8 +156,7 @@ class IndexerThread {
                         artist_ids.pop_front();  // O(1) for deque
                         newthread->done.store(false, std::memory_order_release);
                         newthread->artist_id = artist_id;
-                        newthread->th = new thread(thread_build_index, &recording_index, newthread, artist_id, db_file,
-                                                  release_ngrams, recording_ngrams); 
+                        newthread->th = new thread(thread_build_index, &recording_index, newthread, artist_id, db_file); 
                         threads.push_back(newthread);
                         count++;
                     }

@@ -45,21 +45,12 @@ class FuzzyIndex {
         vector<string>            index_texts;
 
         // Default to false to preserve legacy Artist index behavior
-        FuzzyIndex(bool use_hnsw = false, const vector<string> *ngrams = nullptr) :
+        FuzzyIndex(bool use_hnsw = false) :
              vectorizer(false, false), use_hnsw(use_hnsw) {
 
             string space_type = use_hnsw ? "cosinesimil_sparse" : "negdotprod_sparse_fast";
             space = similarity::SpaceFactoryRegistry<float>::Instance().CreateSpace(
                 space_type, similarity::AnyParams());
-            
-            // Set global weights from ngrams if provided
-            if (ngrams != nullptr && !ngrams->empty()) {
-                std::unordered_map<std::string, double> global_idf;
-                for (const auto& ngram : *ngrams) {
-                    global_idf[ngram] = 1.0;  // Weight of 1.0 for all popular ngrams
-                }
-                vectorizer.set_global_weights(global_idf);
-            }
         }
         
         ~FuzzyIndex() {
