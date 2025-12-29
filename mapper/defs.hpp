@@ -8,7 +8,6 @@
 #include <map>
 
 // Shared constants
-//const float ARTIST_CONFIDENCE_THRESHOLD = 0.45;
 const int NUM_ROWS_PER_COMMIT = 25000;
 const auto MAX_ENCODED_STRING_LENGTH = 30;
 

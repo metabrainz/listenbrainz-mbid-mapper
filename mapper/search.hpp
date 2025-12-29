@@ -18,7 +18,7 @@
 
 // TODO: Create dynamic thresholds based on length. Shorter artists will need more checks.
 const float artist_threshold = .7;
-const float release_threshold = .6;
+const float release_threshold = .3; // release threshold is lower because for some artists the vocabulary is quite small
 const float recording_threshold = .7;
 
 const char *fetch_metadata_query = 
@@ -194,7 +194,7 @@ class SearchFunctions {
                     return nullptr;
                 }
                 
-                vector<IndexResult> *rel_results = release_recording_index->stupid_release_index->search(release_name_encoded, .7, 't');
+                vector<IndexResult> *rel_results = release_recording_index->stupid_release_index->search(release_name_encoded, release_threshold, 't');
                 if (rel_results != nullptr && rel_results->size()) {
                     sort(rel_results->begin(), rel_results->end(), [](const IndexResult& a, const IndexResult& b) {
                         if (a.confidence != b.confidence)
@@ -213,7 +213,7 @@ class SearchFunctions {
                 return rel_results;
             }
 
-            vector<IndexResult> *rel_results = release_recording_index->release_index->search(release_name_encoded, .7, 'l');
+            vector<IndexResult> *rel_results = release_recording_index->release_index->search(release_name_encoded, release_threshold, 'l');
             if (rel_results != nullptr && rel_results->size()) {
                 // Sort results by confidence (desc), then by id (asc) for deterministic ordering
                 sort(rel_results->begin(), rel_results->end(), [](const IndexResult& a, const IndexResult& b) {
@@ -253,7 +253,7 @@ class SearchFunctions {
                     return nullptr;
                 }
                 
-                vector<IndexResult> *rec_results = release_recording_index->stupid_recording_index->search(recording_name_encoded, .7, 's');
+                vector<IndexResult> *rec_results = release_recording_index->stupid_recording_index->search(recording_name_encoded, recording_threshold, 's');
                 if (rec_results != nullptr && rec_results->size()) {
                     sort(rec_results->begin(), rec_results->end(), [](const IndexResult& a, const IndexResult& b) {
                         if (a.confidence != b.confidence)
@@ -272,7 +272,7 @@ class SearchFunctions {
                 return rec_results;
             }
 
-            vector<IndexResult> *rec_results = release_recording_index->recording_index->search(recording_name_encoded, .7, 'c');
+            vector<IndexResult> *rec_results = release_recording_index->recording_index->search(recording_name_encoded, recording_threshold, 'c');
             if (rec_results != nullptr && rec_results->size()) {
                 // Sort results by confidence (desc), then by id (asc) for deterministic ordering
                 sort(rec_results->begin(), rec_results->end(), [](const IndexResult& a, const IndexResult& b) {

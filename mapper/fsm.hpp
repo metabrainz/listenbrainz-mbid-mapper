@@ -11,8 +11,6 @@ using namespace std;
 #include "search.hpp"
 #include <lb_matching_tools/cleaner.hpp>
 
-// TODO: Review alloc/free of results
-
 // Define all states using a macro
 #define STATE_LIST \
     STATE_ITEM(state_start, 0) \
