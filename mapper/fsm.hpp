@@ -94,7 +94,7 @@ static Transition transitions[] = {
     { state_artist_search,              event_no_matches_not_cleaned,  state_clean_artist_name },
     { state_artist_search,              event_has_matches,             state_select_artist_match },
     
-    { state_clean_artist_name,          event_cleaned,                 state_artist_name_check },
+    { state_clean_artist_name,          event_cleaned,                 state_artist_search },
     { state_clean_artist_name,          event_not_cleaned,             state_fail },
 
     { state_select_artist_match,        event_meets_threshold,         state_recording_search },

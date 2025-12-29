@@ -50,6 +50,7 @@ inline std::vector<TestCase> get_basic_tests() {
 inline std::vector<TestCase> get_messy_input_tests() {
     return {
          { "portishead (live)", "portishead", "western eyes", "8f6bd1e4-fbe1-4f50-aa9b-94c450ec0f11", "10ac58ca-0655-4b16-a6cb-58fdc309de0a", "34745941-69c5-401a-bdb9-ae761a9b3562" },
+         { "portishead, useless dude", "portishead", "western eyes", "8f6bd1e4-fbe1-4f50-aa9b-94c450ec0f11", "10ac58ca-0655-4b16-a6cb-58fdc309de0a", "34745941-69c5-401a-bdb9-ae761a9b3562" },
          { "portished", "portishad", "western ey", "8f6bd1e4-fbe1-4f50-aa9b-94c450ec0f11", "10ac58ca-0655-4b16-a6cb-58fdc309de0a", "34745941-69c5-401a-bdb9-ae761a9b3562" },
          { "Eve","pray - Single","pray","66bdd1c9-d1c5-40b7-a487-5061fffbd87d","9117d976-7283-4517-b5ac-513e62009613","f8c50031-b2e0-4b60-b8f6-38215271092c" },
          { "peakk divide", "", "worn-out tapes", "", "", "" }
