@@ -22,9 +22,19 @@
         }
         table {
             font-size: 0.9em;
+            table-layout: fixed;
         }
         td {
             word-break: break-word;
+        }
+        th:nth-child(1), td:nth-child(1) {
+            width: 33.33%;
+        }
+        th:nth-child(2), td:nth-child(2) {
+            width: 33.33%;
+        }
+        th:nth-child(3), td:nth-child(3) {
+            width: 33.33%;
         }
     </style>
 </head>
@@ -36,6 +46,8 @@
         <h1>Supported Test Cases</h1>
         <p>These are the test cases used to validate the MBID mapping service. Click any row to search for that recording.</p>
         
+        {{#sections}}
+        <h2>{{section_name}}</h2>
         <table>
             <thead>
                 <tr>
@@ -54,6 +66,7 @@
                 {{/test_cases}}
             </tbody>
         </table>
+        {{/sections}}
         
         <footer>
             <p><a href="/">← Back to Search</a> | <a href="/docs">API Documentation</a></p>

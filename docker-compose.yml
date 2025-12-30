@@ -13,26 +13,11 @@ services:
     env_file:
       - path: .env
         required: false
-    environment:
-      - VIRTUAL_HOST=mapper.listenbrainz.org
-      - VIRTUAL_PORT=5000
     expose:
       - "5000"
     ports:
       - "127.0.0.1:5000:5000"
-    networks:
-      - ssl-proxy-network
-      - musicbrainz
     command: ["/mapper/server"]
-
-# if networks of volumes are renamed, the must be updated in run.sh as well
-networks:
-  musicbrainz:
-    external: true
-    name: musicbrainz-docker_default
-  ssl-proxy-network:
-    name: ssl-proxy-network
-    external: true
 
 volumes:
   mapper-volume:

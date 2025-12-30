@@ -8,6 +8,7 @@
 #include <csignal>
 #include <memory>
 #include "crow.h"
+#include "SQLiteCpp.h"
 #include "fsm.hpp"
 #include "statistics.hpp"
 #include "test_cases.hpp"
@@ -54,6 +55,8 @@ struct ThreadStats {
     int count_200 = 0;
     int count_400 = 0;
     int count_404 = 0;
+    int count_500 = 0;
+    int count_503 = 0;
     int total = 0;
 };
 
@@ -63,13 +66,17 @@ void update_stats(int status) {
     if (status == 200) stats.count_200++;
     else if (status == 400) stats.count_400++;
     else if (status == 404) stats.count_404++;
+    else if (status == 500) stats.count_500++;
+    else if (status == 503) stats.count_503++;
     
     stats.total++;
     if (stats.total >= REPORT_STATS_REQUEST_COUNT) {
-        g_statistics->update(stats.count_200, stats.count_400, stats.count_404);
+        g_statistics->update(stats.count_200, stats.count_400, stats.count_404, stats.count_500, stats.count_503);
         stats.count_200 = 0;
         stats.count_400 = 0;
         stats.count_404 = 0;
+        stats.count_500 = 0;
+        stats.count_503 = 0;
         stats.total = 0;
     }
 }
@@ -198,18 +205,9 @@ int main(int argc, char* argv[]) {
 
     CROW_ROUTE(app, "/")
     ([](const crow::request& req) {
-        // Show loading page if not ready
-        if (!g_ready) {
-            auto page_text = crow::mustache::load_text("loading.html");
-            if (page_text.empty()) {
-                return crow::response(500, "Template \"loading.html\" not found.");
-            }
-            auto page = crow::mustache::compile(page_text);
-            return crow::response(200, page.render());
-        }
-
         auto page_text = crow::mustache::load_text("index.html");
         if (page_text.empty()) {
+            update_stats(500);
             return crow::response(500, "Template \"index.html\" not found.");
         }
         auto page = crow::mustache::compile(page_text);
@@ -282,25 +280,21 @@ int main(int argc, char* argv[]) {
 
     CROW_ROUTE(app, "/docs")
     ([]() {
-        if (!g_ready) {
-            auto page = crow::mustache::load("loading.html");
-            update_stats(200);
-            return crow::response(200, page.render());
+        auto page_text = crow::mustache::load_text("docs.html");
+        if (page_text.empty()) {
+            update_stats(500);
+            return crow::response(500, "Template \"docs.html\" not found.");
         }
-        auto page = crow::mustache::load("docs.html");
+        auto page = crow::mustache::compile(page_text);
         update_stats(200);
         return crow::response(200, page.render());
     });
 
     CROW_ROUTE(app, "/supported")
     ([]() {
-        if (!g_ready) {
-            auto page = crow::mustache::load("loading.html");
-            return crow::response(200, page.render());
-        }
-        
         auto page_text = crow::mustache::load_text("supported.html");
         if (page_text.empty()) {
+            update_stats(500);
             return crow::response(500, "Template \"supported.html\" not found.");
         }
         auto page = crow::mustache::compile(page_text);
@@ -323,39 +317,85 @@ int main(int argc, char* argv[]) {
             return escaped.str();
         };
         
-        // Collect all test cases from all test groups
-        std::vector<TestCase> all_test_cases;
-        auto append = [&](const std::vector<TestCase>& cases) {
-            all_test_cases.insert(all_test_cases.end(), cases.begin(), cases.end());
+        // Define test groups with names and their test cases
+        struct TestGroup {
+            std::string name;
+            std::vector<TestCase> cases;
         };
-        append(get_basic_tests());
-        append(get_messy_input_tests());
-        append(get_release_selection_tests());
-        append(get_no_release_tests());
-        append(get_obscure_release_tests());
-        append(get_obscure_recording_tests());
-        append(get_special_character_tests());
-        append(get_artist_credit_tests());
-        append(get_non_album_recording_tests());
-        append(get_avoid_popular_match_tests());
-        append(get_punctuation_tests());
-        append(get_second_best_release_tests());
-        append(get_fuzzy_release_tests());
-        append(get_recording_alias_tests());
-        append(get_overloaded_artist_tests());
         
-        std::vector<crow::mustache::context> cases_list;
-        for (const auto& tc : all_test_cases) {
-            crow::mustache::context tc_ctx;
-            tc_ctx["artist_credit_name"] = tc.artist_credit_name;
-            tc_ctx["release_name"] = tc.release_name;
-            tc_ctx["recording_name"] = tc.recording_name;
-            tc_ctx["artist_credit_name_encoded"] = url_encode(tc.artist_credit_name);
-            tc_ctx["release_name_encoded"] = url_encode(tc.release_name);
-            tc_ctx["recording_name_encoded"] = url_encode(tc.recording_name);
-            cases_list.push_back(tc_ctx);
+        std::vector<TestGroup> test_groups = {
+            {"Basic Tests", get_basic_tests()},
+            {"Messy Input Tests", get_messy_input_tests()},
+            {"Release Selection Tests", get_release_selection_tests()},
+            {"No Release Tests", get_no_release_tests()},
+            {"Obscure Release Tests", get_obscure_release_tests()},
+            {"Obscure Recording Tests", get_obscure_recording_tests()},
+            {"Special Character Tests", get_special_character_tests()},
+            {"Artist Credit Tests", get_artist_credit_tests()},
+            {"Non-Album Recording Tests", get_non_album_recording_tests()},
+            {"Avoid Popular Match Tests", get_avoid_popular_match_tests()},
+            {"Punctuation Tests", get_punctuation_tests()},
+            {"Second Best Release Tests", get_second_best_release_tests()},
+            {"Fuzzy Release Tests", get_fuzzy_release_tests()},
+            {"Recording Alias Tests", get_recording_alias_tests()},
+            {"Overloaded Artist Tests", get_overloaded_artist_tests()}
+        };
+        
+        // Build sections for template
+        std::vector<crow::mustache::context> sections_list;
+        for (const auto& group : test_groups) {
+            if (group.cases.empty()) continue;
+            
+            crow::mustache::context section_ctx;
+            section_ctx["section_name"] = group.name;
+            
+            std::vector<crow::mustache::context> cases_list;
+            for (const auto& tc : group.cases) {
+                crow::mustache::context tc_ctx;
+                tc_ctx["artist_credit_name"] = tc.artist_credit_name;
+                tc_ctx["release_name"] = tc.release_name;
+                tc_ctx["recording_name"] = tc.recording_name;
+                tc_ctx["artist_credit_name_encoded"] = url_encode(tc.artist_credit_name);
+                tc_ctx["release_name_encoded"] = url_encode(tc.release_name);
+                tc_ctx["recording_name_encoded"] = url_encode(tc.recording_name);
+                cases_list.push_back(tc_ctx);
+            }
+            section_ctx["test_cases"] = std::move(cases_list);
+            sections_list.push_back(section_ctx);
         }
-        ctx["test_cases"] = std::move(cases_list);
+        ctx["sections"] = std::move(sections_list);
+        
+        update_stats(200);
+        return crow::response(200, page.render(ctx));
+    });
+
+    CROW_ROUTE(app, "/about")
+    ([]() {
+        auto page_text = crow::mustache::load_text("about.html");
+        if (page_text.empty()) {
+            update_stats(500);
+            return crow::response(500, "Template \"about.html\" not found.");
+        }
+        auto page = crow::mustache::compile(page_text);
+        crow::mustache::context ctx;
+        
+        // Query SQLite database for last_updated timestamp
+        try {
+            string db_file = g_index_dir + "/mapping.db";
+            SQLite::Database db(db_file, SQLite::OPEN_READONLY);
+            SQLite::Statement query(db, "SELECT value FROM update_metadata WHERE key = 'last_updated'");
+            
+            if (query.executeStep()) {
+                string last_updated = query.getColumn(0).getText();
+                ctx["last_updated"] = last_updated;
+                ctx["has_timestamp"] = true;
+            } else {
+                ctx["has_timestamp"] = false;
+            }
+        } catch (const std::exception& e) {
+            ctx["has_timestamp"] = false;
+            ctx["error"] = string("Error reading database: ") + e.what();
+        }
         
         update_stats(200);
         return crow::response(200, page.render(ctx));
@@ -367,6 +407,7 @@ int main(int argc, char* argv[]) {
         if (!g_ready) {
             crow::json::wvalue error;
             error["error"] = "Server is starting up, indexes are still loading";
+            update_stats(503);
             return crow::response(503, error);
         }
 
@@ -422,6 +463,8 @@ int main(int argc, char* argv[]) {
     CROW_ROUTE(app, "/metrics")
     ([]() {
         g_statistics->update_cache_items(g_index_cache->get_cache_entry_count());
+        string db_file = g_index_dir + "/mapping.db";
+        g_statistics->update_last_updated(db_file);
         crow::response res(200, g_statistics->get_metrics());
         res.set_header("Content-Type", "text/plain; charset=utf-8");
         return res;
