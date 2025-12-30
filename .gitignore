@@ -3,4 +3,5 @@ build
 mapper/build
 listen_test_data
 index
+test_index
 .vscode

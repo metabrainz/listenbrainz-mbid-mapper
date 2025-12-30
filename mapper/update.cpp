@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #include <libpq-fe.h>
 
@@ -19,6 +20,8 @@ using namespace std;
 // Batch size for processing artist_credit_ids
 constexpr size_t BATCH_SIZE = 5000;
 
+const int update_minute_offset = 15;  // Run at 15 minutes past the hour
+
 void print_usage() {
     lb_log("Usage: update [options]");
     lb_log("");
@@ -32,48 +35,7 @@ void print_usage() {
     lb_log("  CANONICAL_MUSICBRAINZ_DATA_CONNECT  PostgreSQL connection string");
 }
 
-int main(int argc, char* argv[]) {
-    init_logging();
-    load_env_file();
-    
-    // Initialize nmslib once in main thread before any FuzzyIndex is created
-    similarity::initLibrary(0, LIB_LOGNONE, NULL);
-    
-    bool dry_run = true;  // Default to dry-run for safety
-    
-    // Parse arguments
-    for (int i = 1; i < argc; i++) {
-        string arg = argv[i];
-        if (arg == "--help" || arg == "-h") {
-            print_usage();
-            return 0;
-        } else if (arg == "--dry-run") {
-            dry_run = true;
-        } else if (arg == "--apply") {
-            dry_run = false;
-        } else {
-            lb_error("Unknown option: %s", arg.c_str());
-            print_usage();
-            return 1;
-        }
-    }
-    
-    const char* env_index_dir = getenv("INDEX_DIR");
-    if (!env_index_dir || strlen(env_index_dir) == 0) {
-        lb_error("INDEX_DIR environment variable not set");
-        return 1;
-    }
-    
-    string index_dir = env_index_dir;
-    lb_log("INDEX_DIR: %s", index_dir.c_str());
-    lb_log("Mode: %s", dry_run ? "DRY RUN (use --apply to make changes)" : "APPLY (changes will be made)");
-    
-    const char* pg_connect = getenv("CANONICAL_MUSICBRAINZ_DATA_CONNECT");
-    if (!pg_connect || strlen(pg_connect) == 0) {
-        lb_error("CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable not set");
-        return 1;
-    }
-    
+int run_update(const string& index_dir, const char* pg_connect, bool dry_run) {
     // Connect to PostgreSQL
     lb_log("Connecting to PostgreSQL...");
     PGconn* pg_conn = PQconnectdb(pg_connect);
@@ -227,4 +189,79 @@ int main(int argc, char* argv[]) {
         PQfinish(pg_conn);
         return 1;
     }
+}
+
+int main(int argc, char* argv[]) {
+    init_logging();
+    load_env_file();
+    
+    // Initialize nmslib once in main thread before any FuzzyIndex is created
+    similarity::initLibrary(0, LIB_LOGNONE, NULL);
+    
+    bool dry_run = false;
+    
+    // Parse arguments
+    for (int i = 1; i < argc; i++) {
+        string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            print_usage();
+            return 0;
+        } else if (arg == "--dry-run") {
+            dry_run = true;
+        } else {
+            lb_error("Unknown option: %s", arg.c_str());
+            print_usage();
+            return 1;
+        }
+    }
+    
+    const char* env_index_dir = getenv("INDEX_DIR");
+    if (!env_index_dir || strlen(env_index_dir) == 0) {
+        lb_error("INDEX_DIR environment variable not set");
+        return 1;
+    }
+    
+    string index_dir = env_index_dir;
+    lb_log("INDEX_DIR: %s", index_dir.c_str());
+    lb_log("Mode: %s", dry_run ? "DRY RUN (use --apply to make changes)" : "APPLY (changes will be made)");
+    lb_log("Update schedule: :%02d past each hour", update_minute_offset);
+    
+    const char* pg_connect = getenv("CANONICAL_MUSICBRAINZ_DATA_CONNECT");
+    if (!pg_connect || strlen(pg_connect) == 0) {
+        lb_error("CANONICAL_MUSICBRAINZ_DATA_CONNECT environment variable not set");
+        return 1;
+    }
+    
+    // Main loop: sleep until scheduled time, then run update
+    while (true) {
+        // Calculate time until next scheduled run
+        auto now = std::time(nullptr);
+        auto tm = *std::localtime(&now);
+        
+        // Calculate minutes until the target minute of the hour
+        int current_minute = tm.tm_min;
+        int minutes_until_next = (60 - current_minute + update_minute_offset) % 60;
+        if (minutes_until_next == 0) minutes_until_next = 60;
+        
+        // Convert to seconds, accounting for current seconds past the minute
+        int seconds_to_sleep = minutes_until_next * 60 - tm.tm_sec;
+        
+        lb_log("Next update scheduled in %d minutes %d seconds (at :%02d past the hour)", 
+               minutes_until_next - 1, 60 - tm.tm_sec, update_minute_offset);
+        
+        // Sleep until scheduled time
+        std::this_thread::sleep_for(std::chrono::seconds(seconds_to_sleep));
+        
+        lb_log("Starting scheduled update...");
+        
+        int result = run_update(index_dir, pg_connect, dry_run);
+        
+        if (result != 0) {
+            lb_error("Update failed with exit code %d", result);
+        }
+        
+        lb_log("Update cycle complete");
+    }
+    
+    return 0;
 }

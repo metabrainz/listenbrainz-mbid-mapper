@@ -19,5 +19,25 @@ services:
       - "127.0.0.1:5000:5000"
     command: ["/mapper/server"]
 
+  updater:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - mapper-volume:/data
+    restart:
+      unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    networks:
+      - musicbrainz
+    command: ["/mapper/update"]
+
 volumes:
   mapper-volume:
+
+networks:
+  musicbrainz:
+    external: true
+    name: musicbrainz-docker_default

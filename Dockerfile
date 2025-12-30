@@ -44,12 +44,13 @@ RUN apt-get update && apt-get install -y \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create target directory
-RUN mkdir -p /mapper
+# Create target directories
+RUN mkdir -p /mapper /logs
 
 # Copy built binaries from builder stage
 COPY --from=builder /src/build/make_indexes /mapper/
 COPY --from=builder /src/build/test /mapper/
+COPY --from=builder /src/build/update /mapper/
 COPY --from=builder /src/build/explore /mapper/
 COPY --from=builder /src/build/make_mapping /mapper/
 COPY --from=builder /src/build/server /mapper/
@@ -63,5 +64,5 @@ COPY --from=builder /src/mapper/templates /mapper/templates
 
 WORKDIR /data
 
-# Default command
-CMD ["/mapper/server", "-i", "/index", "-t", "/mapper/data"]
+# Start server
+CMD ["/mapper/server"]

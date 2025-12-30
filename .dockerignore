@@ -1,8 +1,10 @@
 index
+test_index
 # Skip build directories
 build/
 mapper/build/
 **/build/
+listen_test_data
 
 # Skip any CMake generated files at root
 CMakeCache.txt
