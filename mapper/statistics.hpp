@@ -97,7 +97,14 @@ class Statistics {
             if (!last_updated_timestamp.empty()) {
                 data += string("# HELP lbmapper_last_updated The timestamp when the mapping database was last updated.\n");
                 data += string("# TYPE lbmapper_last_updated gauge\n");
-                data += string("lbmapper_last_updated ") + last_updated_timestamp + string("\n");
+                
+                // Convert ISO timestamp to epoch
+                std::tm tm = {};
+                std::istringstream ss(last_updated_timestamp);
+                ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+                std::time_t epoch = std::mktime(&tm);
+                
+                data += string("lbmapper_last_updated ") + to_string(epoch) + string("\n");
             }
             
             return data;
