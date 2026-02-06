@@ -270,6 +270,7 @@ class RecordingIndex {
                 auto alias_it = recording_aliases.find(rec_id);
                 if (alias_it != recording_aliases.end()) {
                     for(const string &alias : alias_it->second) {
+                        printf("'%s'\n", alias.c_str());
                         // Only add if this alias text is not already in the index
                         if (recording_string_index_map.find(alias) == recording_string_index_map.end()) {
                             unsigned int new_index = recording_texts.size();

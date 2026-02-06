@@ -162,7 +162,9 @@ inline std::vector<TestCase> get_fuzzy_release_tests() {
 inline std::vector<TestCase> get_recording_alias_tests() {
     return {
          { "TAEYEON", "I", "쌍둥이자리 (Gemini)", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
-         { "TAEYEON", "I", "Gemini", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"}
+         { "TAEYEON", "I", "Gemini", "2b786fb3-a116-4163-9b65-cf56f03c8a7f", "a4f83b33-a9b0-4ec1-8e93-163f6f4b756f", "46f82fd5-e46f-4083-9a78-c3ad49527ae2"},
+         { "lull", "moments", "moment 16", "2970da48-7f03-4f49-897e-e633b256992a", "21b10815-cf4b-492d-8b14-3bc7b02fc16c", "803a0417-cd42-405a-8bac-13316b637f7c"},
+         { "lull", "moments", "moment 17", "2970da48-7f03-4f49-897e-e633b256992a", "21b10815-cf4b-492d-8b14-3bc7b02fc16c", "618a53da-aab5-499e-9cab-2861a1887a75"}
     };
 }
  
