@@ -294,13 +294,35 @@ and it is directly applicable.** Reuse its methodology and corpus.
 
 ## 9. API & operability
 
-- **JSON API** (I7): `GET /1/mapping/lookup?artist=&recording=[&release=&isrc=&
-  duration_ms=&acoustid=]` → JSON `{ artist_mbids, artist_credit_name, release_mbid,
+### Core API principle: one endpoint, progressive precision
+
+**One lookup endpoint serves both consumers. Everything beyond the minimum is optional,
+and precision scales with how much you provide.** The caller sends whatever it has; the
+mapper uses every signal available and degrades gracefully when signals are missing —
+it never *requires* the rich inputs, and never ignores them when present.
+
+- **Minimum:** `recording` (+ `artist` strongly recommended). Pure name-only fuzzy
+  match — the ListenBrainz-listen path.
+- **+ `release`:** disambiguates which release/edition → better `release_mbid`.
+- **+ `duration_ms`:** breaks ties between same-named recordings (studio/live/remix).
+- **+ `isrc` (one or many):** near-exact recording resolution; short-circuits fuzzy.
+- **+ `acoustid`:** strongest — identifies the audio itself; the Picard path.
+
+The **signal ladder** (strongest first): `acoustid > isrc > duration > names`. Strong
+IDs short-circuit and set high confidence; weaker signals re-rank name candidates
+(§6). The response's `confidence` and `match_source` therefore *reflect the input
+richness* — a name-only listen might return `confidence 0.72, match_source "name"`,
+while a Picard lookup with a matching ISRC returns `confidence ~1.0,
+match_source "isrc"`. Same endpoint, same contract, precision proportional to input.
+
+- **JSON API** (I7): `GET /1/mapping/lookup?recording=&artist=[&release=&duration_ms=
+  &isrc=&isrc=&acoustid=]` → JSON `{ artist_mbids, artist_credit_name, release_mbid,
   release_name, recording_mbid, recording_name, confidence, match_source }`.
-  `match_source ∈ {acoustid, isrc, name}` so Picard-style callers can reason about
-  trust. `404` on no match, `503` until ready, `400` on missing required params.
-  Support **multiple ISRCs** per query (Picard files can carry several) and treat the
-  ISRC-present-but-candidate-has-none asymmetry explicitly (§8).
+  `match_source ∈ {acoustid, isrc, name}` so callers can reason about trust. `404` on
+  no match, `503` until ready, `400` if the minimum inputs are absent.
+  `isrc` is **repeatable** (Picard files can carry several); treat the
+  ISRC-present-but-candidate-has-none asymmetry explicitly (§8). A `POST` batch variant
+  (array of lookups) is worthwhile for the high-volume listen path.
 - **Health/readiness** endpoints distinct from search (I C5).
 - **Metrics** (I8): Prometheus endpoint — match/no-match rate, confidence histogram,
   cache hit rate, latency percentiles, update lag (`now − last_updated`), current
