@@ -275,7 +275,10 @@ and it is directly applicable.** Reuse its methodology and corpus.
 - **Listen-side (low-signal):** a *separate* name-only corpus derived from real
   ListenBrainz listens (`{artist_name, release_name, track_name}` → expected MBIDs),
   since Picard's corpus is ID/duration-rich and does not represent scrobble noise.
-  Include the `PROBLEMS.txt` cases and known-messy scrobbles.
+  Include the `PROBLEMS.txt` cases and known-messy scrobbles. See `LISTEN_SPEC.md` for
+  the verified listen format, the current `/1/metadata/lookup/` contract to stay
+  compatible with, and label sources (the mbid-mapping writer's stored matches +
+  dumped listens).
 - **Accuracy metric:** precision / recall / match-rate per corpus, printed and asserted
   in CI; a regression fails the build. Report the two regimes separately (Picard
   precision-critical; listens recall-sensitive).
