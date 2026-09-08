@@ -29,6 +29,21 @@ This is a plan, not code. It states decisions, the reasoning, and a phased path.
 **Definition of done:** on the golden set (§8), the Rust mapper meets or beats the C++
 version's match rate, with p99 warm-cache latency and memory within budget (§7).
 
+### The two consumers (they pull in different directions — design for both)
+
+| | **Picard** (`/home/zas/src/picard`) | **ListenBrainz listens** |
+|---|---|---|
+| Has | audio file + rich tags: multiple ISRCs, precise duration, track number, barcode, can compute **AcoustID** | loose scrobble strings only: artist / release / track names; sometimes duration; rarely IDs |
+| Matches | a file/cluster → release/recording among confusable candidates | a listen → MBIDs at high volume |
+| Regime | **high-signal, precision-critical** | **low-signal, high-volume, recall-sensitive** |
+| Needs | strong-ID fast paths (ISRC/AcoustID), duration tiebreak, tolerance to *degraded* tags | robust name-only fuzzy matching, cheap per-lookup |
+
+Design consequence: this is exactly why the pipeline is **strong-ID-short-circuits,
+weak-signals-rerank, everything optional** (§6). The same core must serve a client that
+supplies IDs+duration *and* one that supplies only names. The eval must cover **both**
+regimes (§8): Picard's harness (`scripts/eval_matching/`) covers the high-signal side
+thoroughly; the listen side needs its own name-only corpus.
+
 ---
 
 ## 1. Guiding decisions (the ones that shape everything)
@@ -226,15 +241,47 @@ Targets (to be validated by benchmark, §8 / `IMPROVEMENTS.md` I8):
 
 ## 8. Testing, accuracy metric, and benchmarking (built in from day 1)
 
-This is `IMPROVEMENTS.md` I2, treated as core infrastructure, not an afterthought.
-- **Golden set** (`golden/`): `(artist, release, recording[, isrc, duration]) →
-  {artist_mbid, release_mbid, recording_mbid}`, seeded from `test_cases.hpp` + the hard
-  cases in `PROBLEMS.txt` + cases *only* solvable with duration/ISRC (to prove signals
-  help).
+This is `IMPROVEMENTS.md` I2, treated as core infrastructure. **Do not reinvent the
+eval — Picard already has a mature one at `/home/zas/src/picard/scripts/eval_matching/`
+and it is directly applicable.** Reuse its methodology and corpus.
+
+**What Picard's harness already provides (reuse it):**
+- A curated **corpus** of confusable releases/recordings with known-correct MBIDs —
+  the same hard cases as `PROBLEMS.txt` (Weezer Blue/Green, GY!BE spelling variants,
+  Collision Course 23-vs-13 tracks, Beethoven 5th conductors, 椎名林檎 digital vs CD,
+  Nirvana studio vs Unplugged, Queen GH editions). `corpus/releases.tsv` is the
+  registry; `eval_release_*.json` are cached MB responses.
+- A **degradation model** (`eval_matching.py`): takes correct metadata and corrupts it
+  (typos, missing/wrong barcode, year-only date, ±3 s / ±15 s length diffs, remaster
+  suffix, feat. artists, swapped fields, and realistic combos). This tests robustness
+  against *degraded tags* — exactly Picard's regime — far richer than static
+  input→output pairs.
+- **Signal-specific synthetic fixtures** (`eval_recording_*.json`): `multi_isrc`
+  (full/partial/unique/all-wrong ISRC overlap), `same_song`, `zero_length` (missing
+  duration), `unicode`, `short_tracks`, `feat_artists`, `parenthetical`,
+  `extreme_similarity`. These exercise the ISRC/duration signals from §6/§14 directly.
+- A **save/compare delta workflow** (`--save`/`--compare`) reporting improved/regressed
+  cases — precisely the CI accuracy-gate we want.
+- It has already surfaced a concrete scoring bug to design against: *file has ISRCs but
+  a candidate has none → ISRC comparison is skipped, letting the no-ISRC candidate win
+  over partially-matching ones.* Our `score.rs` must penalize ISRC mismatch and handle
+  the "have ISRC vs candidate has none" asymmetry explicitly.
+
+**Plan:**
+- **Picard-side (high-signal):** point the eval harness (or a thin adapter) at the Rust
+  mapper's `GET /1/mapping/lookup` so the same corpus + degradations + delta workflow
+  gate the mapper. Reuse the fixtures rather than duplicating them; keep them as a git
+  submodule or vendored snapshot under `golden/picard/`.
+- **Listen-side (low-signal):** a *separate* name-only corpus derived from real
+  ListenBrainz listens (`{artist_name, release_name, track_name}` → expected MBIDs),
+  since Picard's corpus is ID/duration-rich and does not represent scrobble noise.
+  Include the `PROBLEMS.txt` cases and known-messy scrobbles.
+- **Accuracy metric:** precision / recall / match-rate per corpus, printed and asserted
+  in CI; a regression fails the build. Report the two regimes separately (Picard
+  precision-critical; listens recall-sensitive).
 - **Minimal DB** for CI: build with `ac.id IN (1160983, 49627, 65, 21238)` — fast, no
-  full dump.
-- **Accuracy metric:** precision / recall / match-rate over the golden set, printed and
-  asserted in CI. Any change that drops it fails.
+  full dump. (Note: the eval corpus artists must exist in the built `mapping.db`; either
+  extend the minimal filter to cover the corpus MBIDs or run eval against a fuller DB.)
 - **Differential tests vs C++:** same inputs through both over the same `mapping.db`;
   MBID triples must match (confidence need not). Track divergences (esp. unidecode).
 - **Property tests:** encoding idempotence, TF-IDF determinism, sparse-index equals a
@@ -252,6 +299,8 @@ This is `IMPROVEMENTS.md` I2, treated as core infrastructure, not an afterthough
   release_name, recording_mbid, recording_name, confidence, match_source }`.
   `match_source ∈ {acoustid, isrc, name}` so Picard-style callers can reason about
   trust. `404` on no match, `503` until ready, `400` on missing required params.
+  Support **multiple ISRCs** per query (Picard files can carry several) and treat the
+  ISRC-present-but-candidate-has-none asymmetry explicitly (§8).
 - **Health/readiness** endpoints distinct from search (I C5).
 - **Metrics** (I8): Prometheus endpoint — match/no-match rate, confidence histogram,
   cache hit rate, latency percentiles, update lag (`now − last_updated`), current
@@ -265,8 +314,10 @@ This is `IMPROVEMENTS.md` I2, treated as core infrastructure, not an afterthough
 
 **Phase 0 — skeleton & harness (de-risk accuracy):**
 `mapper-core` (encode + tfidf + sparse index + levenshtein) with property/differential
-tests; golden set + minimal-DB CI; the accuracy metric. No server yet. *Exit: encoder
-matches C++ byte-for-byte; sparse index matches a brute-force reference.*
+tests; wire up **Picard's `eval_matching` corpus** (§8) + a small listen corpus +
+minimal-DB CI; the accuracy metric. No server yet. *Exit: encoder matches C++
+byte-for-byte; sparse index matches a brute-force reference; eval harness runs against
+a stub and reports the metric.*
 
 **Phase 1 — build path:** `mapper-mb` (Postgres extraction, custom sorts, single
 canonical_release path) + `mapper-db` writes + `mapper-index` build → produce a real
